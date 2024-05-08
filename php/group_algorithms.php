@@ -3,6 +3,6 @@
 <html lang="en">
 
 <body class="index">
-the tabular data will be uploaded here
+machine learning algorithm for group
 </body>
 </html>

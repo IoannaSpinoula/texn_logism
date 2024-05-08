@@ -3,6 +3,6 @@
 <html lang="en">
 
 <body class="index">
-the tabular data will be uploaded here
+2d visualization of tabular data
 </body>
 </html>

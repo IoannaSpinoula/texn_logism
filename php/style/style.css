@@ -1,0 +1,80 @@
+* {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    text-decoration: none;
+    font-family: "Poppins", sans-serif;
+  }
+
+  header div{
+    color:bisque;
+    text-align: left;
+    font-weight: bolder;
+    font-size: x-large;
+    width: 50%;
+    margin:10px;
+    height: auto;
+  }
+  header.mhead{
+    text-align: center;
+    background-color: black;
+    color:bisque;
+    text-decoration: none;
+    height: auto;
+    padding: 30px;
+  }
+  
+  a{
+    color: inherit; /* Inherits color from parent */
+    text-decoration: none;
+  }
+
+  p.links{
+    margin-left: 20px;
+    margin-bottom: 20px;
+  }
+
+  header nav{
+    float: right;
+    color:rgb(216, 122, 84);
+    font-weight: bolder;
+    font-size: x-large;
+    height: auto;
+    
+  }
+
+  section.names{
+    text-align: center;
+    width:500px;
+    height: auto;
+    background-color: antiquewhite;
+    color: black;
+    margin: 10px auto;
+    padding: 20px;
+  }
+
+  ul.names {
+    list-style: circle;
+    margin-left: 20px !important;
+    padding-left: 20px !important;
+}
+section.contacts{
+    text-align: center;
+    width:500px;
+    height: auto;
+    background-color: antiquewhite;
+    color: black;
+    margin: 10px auto;
+    padding: 20px;
+}
+  body.info{
+    background-color: burlywood;
+    color: black;
+    text-align: center;
+  }
+
+body.index{
+    background-color: burlywood;
+    color: black;
+    text-align: center;
+}

@@ -22,7 +22,7 @@ session_start();
             <nav class="links">
                 <table >
                     <tr>
-                        <th><p class="links"><a href="./">About</a></p></th>
+                        <th><p class="links"><a href="./">Data</a></p></th>
                         <th><p class="links"><a href="visualization.php">Visualization</a></p></th>
                         <th><p class="links"><a href="machine_learing.php">Categorization</a></p></th>
                         <th><p class="links"><a href="group_algorithms.php">Group</a></p></th>

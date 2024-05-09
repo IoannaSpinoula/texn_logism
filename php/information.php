@@ -13,6 +13,6 @@
     </section>
     <section class="contacts">
         <p><b> Contact </b></p>
-        <p><i>ioannaspinoula@gmail.com</i></p>
+        <a href="mailto:ioannaspinoula@gmail.com"><i>ioannaspinoula@gmail.com</i></a>
 </body>
 </html>

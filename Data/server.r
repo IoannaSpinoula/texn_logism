@@ -1,38 +1,26 @@
 library(shiny)
-library(rpart)
-library(readr)
+library(caret)
 
-server <- function(input, output, session) {
-  model_path <- "C:/Users/HP i7/Documents/tictactoe/inst/extdata/tic_tac_toe_model.rds"
-  model <- readRDS(model_path)
-
-  board_state <- reactive({
-    s <- tolower(c(input$cell1, input$cell2, input$cell3,
-                   input$cell4, input$cell5, input$cell6,
-                   input$cell7, input$cell8, input$cell9))
-    s[s == "blank"] <- "b"
-    s
-  })
-
+server <- function(input, output) {
+  # Load the pre-trained model... use your path!!!!
+  model <- readRDS("C:/Users/HP i7/Documents/tictactoe/tictactoe/tic_tac_toe_model.rds")
+  
   observeEvent(input$predict, {
-    new_data <- as.data.frame(t(board_state()), stringsAsFactors = TRUE)
-    colnames(new_data) <- c("top.left.square", "top.middle.square", "top.right.square",
-                            "middle.left.square", "middle.middle.square", "middle.right.square",
-                            "bottom.left.square", "bottom.middle.square", "bottom.right.square")
-    new_data[] <- lapply(new_data, factor, levels = c("x", "o", "b"))
-
-    predictions <- predict(model, new_data, type = "prob")
-
-    # Safely access prediction results
-    if (!is.null(predictions) && ncol(predictions) >= 2 && "x" %in% colnames(predictions) && "o" %in% colnames(predictions)) {
-      prob_x <- round(predictions[1, "x"] * 100, 2)
-      prob_o <- round(predictions[1, "o"] * 100, 2)
-      prediction_text <- paste("Probability of 'X' winning:", prob_x,
-                               "%\nProbability of 'O' winning:", prob_o, "%")
-    } else {
-      prediction_text <- "Prediction unavailable. Check model output."
-    }
-
-    output$predictionOutput <- renderText(prediction_text)
+    # Prepare the input data as a one-row data frame
+    cells <- sapply(1:9, function(i) input[[paste0("cell", i)]])
+    names(cells) <- c("first.left", "first.middle", "first.right",
+                      "second.left", "second.middle", "second.right",
+                      "third.left", "third.middle", "third.right")
+    new_data <- as.data.frame(t(cells), stringsAsFactors = TRUE)
+    new_data[] <- lapply(new_data, factor, levels = c("b", "x", "o"))
+    
+    # Predict using the model
+    prediction <- predict(model, new_data)
+    
+    # Output the prediction
+    output$prediction <- renderText({
+      paste("Predicted Winner:", ifelse(prediction == "positive", "X", "No clear winner (O or Tie)"))
+    })
   })
 }
+

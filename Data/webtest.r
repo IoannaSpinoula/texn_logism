@@ -1,14 +1,16 @@
 library(shiny)
-library(shinydashboard)  # For dashboard features
-library(readxl)          # For reading Excel files
-library(DT)              # For DataTables
-library(data.table)      # Efficient data handling
+library(shinydashboard)
+library(readxl)
+library(DT)
+library(data.table)
 library(ggplot2)
 library(plotly)
 library(Rtsne)
-library(class)           # For k-NN
-library(cluster)
+library(class)
 library(caret)
+library(e1071)  # For SVM
+library(cluster)  # For hierarchical clustering
+library(fpc)  # For silhouette score
 
 ui <- dashboardPage(
   dashboardHeader(title = "Data Analysis Dashboard"),
@@ -49,7 +51,10 @@ ui <- dashboardPage(
                 selectInput("classVar", "Select Target Variable:", choices = NULL),
                 numericInput("kInput", "Number of Neighbors (k):", value = 3, min = 1),
                 actionButton("runClass", "Run k-NN"),
-                tableOutput("classResults")
+                fluidRow(
+                  column(width = 6, tableOutput("classResults")),
+                  column(width = 6, tableOutput("confMatrix"))
+                )
               )
       ),
       tabItem(tabName = "ml_clustering",
@@ -57,21 +62,20 @@ ui <- dashboardPage(
                 titlePanel("Clustering"),
                 numericInput("clusters", "Number of Clusters:", value = 3, min = 1),
                 actionButton("runCluster", "Run k-means"),
-                plotOutput("clusterPlot")
+                plotOutput("clusterPlot"),
+                plotOutput("silPlot")
               )
       ),
       tabItem(tabName = "results_comparison",
               fluidPage(
                 h2("Model Comparisons"),
-                tableOutput("modelCompare"),
-                plotOutput("clustSilhouette"),
-                tableOutput("classConfMatrix")
+                tableOutput("modelCompare")
               )
       ),
       tabItem(tabName = "information",
               fluidPage(
                 h2("Application Information"),
-                p("This application was developed for data analysis, to provide a detailed presentation of the algorithm results, including performance metrics, and indicate which algorithms perform best for the analyzed data."),
+                p("This application was developed for data analysis, to provide a detailed presentation of thealgorithm results, including performance metrics, and indicate which algorithms perform best for the analyzed data."),
                 p("Developed by: Ioanna, Despina, Panagiotis")
               )
       )
@@ -80,9 +84,14 @@ ui <- dashboardPage(
 )
 
 server <- function(input, output, session) {
-  
   # Reactive value for storing data
   data <- reactiveVal()
+  
+  # Reactive value for storing model results
+  model_results <- reactiveVal(data.frame())
+  
+  # Reactive value for storing k-means result for use in multiple places
+  kmeans_result <- reactiveVal()
   
   # Update choices for selectInput once data is read
   observe({
@@ -90,34 +99,6 @@ server <- function(input, output, session) {
     updateSelectInput(session, "selectVarX", choices = names(df))
     updateSelectInput(session, "selectVarY", choices = names(df))
     updateSelectInput(session, "classVar", choices = names(df))
-  })
-  
-  # PCA Plot
-  observeEvent(input$runPCA, {
-    req(data())
-    pca_result <- prcomp(data()[, c(input$selectVarX, input$selectVarY)], center = TRUE, scale. = TRUE)
-    output$plotPCA <- renderPlot({
-      biplot(pca_result, main = "PCA Plot")
-    })
-  })
-  
-  # t-SNE Plot
-  observeEvent(input$runTSNE, {
-    req(data())
-    tsne_result <- Rtsne(data()[, c(input$selectVarX, input$selectVarY)], dims = 2)
-    output$plotTSNE <- renderPlot({
-      plot(tsne_result$Y, main = "t-SNE Plot")
-    })
-  })
-  
-  # EDA Plot (Using Plotly for interactive plots)
-  output$plotEDA <- renderPlotly({
-    req(data())
-    p <- ggplot(data(), aes_string(x = input$selectVarX, y = input$selectVarY)) +
-      geom_point() +
-      geom_smooth(method = "lm") +
-      labs(title = "Scatter Plot with Regression Line")
-    ggplotly(p)
   })
   
   # Observe file upload and read data
@@ -132,66 +113,107 @@ server <- function(input, output, session) {
     output$dataTable <- renderDT({ data() })  # Render the data as a DataTable
   })
   
+  # PCA Plot
+  observeEvent(input$runPCA, {
+    req(data())
+    pca_result <- prcomp(data()[, c(input$selectVarX, input$selectVarY)], center = TRUE, scale. = TRUE)
+    output$plotPCA <- renderPlot({
+      biplot(pca_result, main = "PCA Plot")
+    })
+  })
+  
+  # EDA Plot (Using Plotly for interactive plots)
+  output$plotEDA <- renderPlotly({
+    req(data())
+    # Remove duplicates if necessary
+    plot_data <- unique(data())
+    p <- ggplot(plot_data, aes_string(x = input$selectVarX, y = input$selectVarY)) +
+      geom_point() +
+      geom_smooth(method = "lm", formula = y ~ x) +  # Explicitly using a linear model
+      labs(title = "Scatter Plot with Regression Line")
+    ggplotly(p)
+  })
+  
+  # t-SNE Plot
+  observeEvent(input$runTSNE, {
+    req(data())
+    # Remove duplicate rows to ensure t-SNE runs without issues
+    unique_data <- unique(data()[, c(input$selectVarX, input$selectVarY)])
+    # Run t-SNE
+    tsne_result <- Rtsne(unique_data, dims = 2, check_duplicates = FALSE)  # Additional check for safety
+    output$plotTSNE <- renderPlot({
+      plot(tsne_result$Y, main = "t-SNE Plot")
+    })
+  })
+  
   # k-NN Classification
   observeEvent(input$runClass, {
     req(data()) # Ensure data is loaded
     df <- data()
     
-    # Ensure `target` is a factor and has the correct length
     target <- factor(df[[input$classVar]], levels = unique(df[[input$classVar]]))
-    
-    # Prepare the dataset for classification, removing the target variable column
     trainData <- df[, !names(df) %in% input$classVar, drop = FALSE]
     
     set.seed(123)  # For reproducibility
     
-    # Perform k-NN classification
     model <- knn(train = trainData, test = trainData, cl = target, k = input$kInput)
+    knn_accuracy <- sum(diag(table(target, model))) / nrow(trainData)
     
-    # Output the results
+    new_row <- data.frame(
+      Model = "k-NN",
+      Variables = paste(input$selectVarX, input$selectVarY, sep=", "),
+      Neighbors = input$kInput,
+      Accuracy = knn_accuracy
+    )
+    model_results(rbind(model_results(), new_row))
+    
     output$classResults <- renderTable({
       data.frame(Actual = target, Prediction = model)
     })
-  })
-  
-  # k-Means Clustering
-  observeEvent(input$runCluster, {
-    req(data())
-    set.seed(123)  # For reproducibility
-    result <- kmeans(data(), centers = input$clusters)
-    output$clusterPlot <- renderPlot({
-      plot(data(), col = result$cluster)
-      points(result$centers, col = 1:input$clusters, pch = 8, cex = 2)
+    output$confMatrix <- renderTable({
+      confusionMatrix(table(target, model))$table
     })
   })
-  
-  # Confusion Matrix for Classification
-  output$classConfMatrix <- renderTable({
-    req(data())
-    # Assuming `predicted` is the predicted class column from k-NN
-    confusionMatrix(data$predicted, data[[input$classVar]])$table
-  })
-  
-  # Silhouette Plot for Clustering
-  output$clustSilhouette <- renderPlot({
-    req(data())
-    # Silhouette plot for k-means clustering
-    dists <- dist(data())
-    clusts <- kmeans(dists, centers = input$clusters)
-    sil <- silhouette(clusts$cluster, dists)
-    plot(sil)
+  # k-Means Clustering
+  observeEvent(input$runCluster, {
+    req(data())  # Ensure data is loaded
+    
+    if (input$clusters > nrow(data())) {
+      showModal(modalDialog(
+        title = "Error",
+        "Number of clusters cannot exceed number of observations in the data.",
+        easyClose = TRUE,
+        footer = NULL
+      ))
+      return()
+    }
+    
+    tryCatch({
+      set.seed(123)  # For reproducibility
+      result <- kmeans(data(), centers = input$clusters)
+      kmeans_result(result)  # Store the k-means result
+      output$clusterPlot <- renderPlot({
+        cols <- rainbow(length(unique(result$cluster)))
+        plot(data(), col = cols[result$cluster])
+        points(result$centers, col = 1:input$clusters, pch = 8, cex = 2)
+      })
+      output$silPlot <- renderPlot({
+        sil <- silhouette(result$cluster, dist(data()))
+        plot(sil, main = "Silhouette Plot")
+      })
+    }, error = function(e) {
+      showModal(modalDialog(
+        title = "Error",
+        paste("Failed to compute k-means:", e$message),
+        easyClose = TRUE,
+        footer = NULL
+      ))
+    })
   })
   
   # Model Comparison Table
   output$modelCompare <- renderTable({
-    req(data())
-    # Placeholder: Compare model metrics
-    df <- data.frame(
-      Model = c("Model 1", "Model 2"),
-      Accuracy = c(0.95, 0.92),  # Example values
-      Silhouette = c(0.75, 0.72)  # Example values
-    )
-    df
+    model_results()
   })
 }
 

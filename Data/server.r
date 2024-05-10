@@ -3,7 +3,7 @@ library(caret)
 
 server <- function(input, output) {
   # Load the pre-trained model... use your path!!!!
-  model <- readRDS("C:/Users/HP i7/Documents/tictactoe/tictactoe/tic_tac_toe_model.rds")
+  model <- readRDS("C:/Users/HP i7/Documents/GitHub/texn_logism/Data/tic_tac_toe_model.rds")
   
   observeEvent(input$predict, {
     # Prepare the input data as a one-row data frame

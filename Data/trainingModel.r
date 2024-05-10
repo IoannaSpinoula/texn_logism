@@ -1,7 +1,7 @@
 library(caret)
 
 # Load data and set new column names
-data <- read.csv("C:/Users/HP i7/Desktop/tictactoe/tic-tac-toe.data", header = FALSE)
+data <- read.csv("C:/Users/HP i7/Documents/Github/texn_logism/Data/tic-tac-toe.data", header = FALSE)
 colnames(data) <- c("first.left", "first.middle", "first.right",
                     "second.left", "second.middle", "second.right",
                     "third.left", "third.middle", "third.right", 
@@ -47,5 +47,6 @@ confusionMatrix <- confusionMatrix(predictions, testData$classification)
 print(confusionMatrix)
 
 # choose your location that you like!!
-saveRDS(model, "C:/Users/HP i7/Documents/tictactoe/tictactoe/tic_tac_toe_model.rds")
+saveRDS(model, "C:/Users/HP i7/Documents/GitHub/texn_logism/Data/tic_tac_toe_model.rds")
+
 

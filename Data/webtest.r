@@ -3,6 +3,9 @@ library(shinydashboard)  # For dashboard features
 library(readxl)          # For reading Excel files
 library(DT)              # For DataTables
 library(data.table)      # Efficient data handling
+library(ggplot2)
+library(plotly)
+library(Rtsne)
 
 # Define the UI
 ui <- dashboardPage(
@@ -11,72 +14,106 @@ ui <- dashboardPage(
     sidebarMenu(
       menuItem("Data Upload", tabName = "data_upload", icon = icon("upload")),
       menuItem("Visualization", tabName = "visualization", icon = icon("chart-line")),
-      menuItem("Machine Learning", tabName = "ml", icon = icon("robot"))
+      menuItem("Machine Learning - Classification", tabName = "ml_classification", icon = icon("robot")),
+      menuItem("Machine Learning - Clustering", tabName = "ml_clustering", icon = icon("sitemap")),
+      menuItem("Information", tabName = "information", icon = icon("info-circle"))
     )
   ),
   dashboardBody(
     tabItems(
       tabItem(tabName = "data_upload",
               fluidPage(
-                fileInput("dataFile", "Upload data", accept = c(".csv", ".xlsx")),
+                fileInput("dataFile", "Upload Data", accept = c(".csv", ".xlsx")),
                 actionButton("loadData", "Load Data"),
                 DTOutput("dataTable")
               )),
       tabItem(tabName = "visualization",
               fluidPage(
-                h3("Visualization Tools will be added here"),
-                plotOutput("plotOutput")  # Placeholder for plot outputs
+                titlePanel("2D Data Visualizations"),
+                selectInput("selectVarX", "Select X Variable:", choices = NULL),
+                selectInput("selectVarY", "Select Y Variable:", choices = NULL),
+                actionButton("runPCA", "Run PCA"),
+                actionButton("runTSNE", "Run t-SNE"),
+                plotOutput("plotPCA"),
+                plotOutput("plotTSNE"),
+                plotlyOutput("plotEDA")
               )),
-      tabItem(tabName = "ml",
+      tabItem(tabName = "ml_classification",
               fluidPage(
-                h3("Tic-Tac-Toe Prediction"),
-                actionButton("runModel", "Run Model"),
-                tableOutput("modelResults")  # Placeholder for model results
+                titlePanel("Classification"),
+                selectInput("classVar", "Select Target Variable:", choices = NULL),
+                numericInput("kInput", "Number of Neighbors (k):", value = 3, min = 1),
+                actionButton("runClass", "Run k-NN"),
+                tableOutput("classResults")
+              )),
+      tabItem(tabName = "ml_clustering",
+              fluidPage(
+                titlePanel("Clustering"),
+                numericInput("clusters", "Number of Clusters:", value = 3, min = 1),
+                actionButton("runCluster", "Run k-means"),
+                plotOutput("clusterPlot")
+              )),
+      tabItem(tabName = "information",
+              fluidPage(
+                h2("Application Information"),
+                p("This application was developed for data analysis, to provide a detailed presentation of the algorithm results, including performance metrics, and indicate which algorithms perform best for the analyzed data."),
+                p("Developed by: Ioanna, Despina, Panagiotis")
               ))
     )
   )
 )
 
-# Define the server logic
 server <- function(input, output, session) {
   
-  # Reactive value to store the data
+  # Reactive value for storing data
   data <- reactiveVal()
+  
+  # Update choices for selectInput once data is read
+  observe({
+    df <- data()
+    updateSelectInput(session, "selectVarX", choices = names(df))
+    updateSelectInput(session, "selectVarY", choices = names(df))
+  })
+  
+  # PCA Plot
+  observeEvent(input$runPCA, {
+    req(data())
+    pca_result <- prcomp(data()[, c(input$selectVarX, input$selectVarY)], center = TRUE, scale. = TRUE)
+    output$plotPCA <- renderPlot({
+      biplot(pca_result, main = "PCA Plot")
+    })
+  })
+  
+  # t-SNE Plot
+  observeEvent(input$runTSNE, {
+    req(data())
+    tsne_result <- Rtsne(data()[, c(input$selectVarX, input$selectVarY)], dims = 2)
+    output$plotTSNE <- renderPlot({
+      plot(tsne_result$Y, main = "t-SNE Plot")
+    })
+  })
+  
+  # EDA Plot (Using Plotly for interactive plots)
+  output$plotEDA <- renderPlotly({
+    req(data())
+    p <- ggplot(data(), aes_string(x = input$selectVarX, y = input$selectVarY)) +
+      geom_point() +
+      geom_smooth(method = "lm") +
+      labs(title = "Scatter Plot with Regression Line")
+    ggplotly(p)
+  })
   
   # Observe file upload and read data
   observeEvent(input$dataFile, {
-    req(input$dataFile)  # Ensure the file is uploaded
-    
-    # Determine the file extension and read data accordingly
+    req(input$dataFile)
     ext <- tools::file_ext(input$dataFile$datapath)
-    switch(ext,
-           csv = data(read.csv(input$dataFile$datapath)),
-           xlsx = data(as.data.frame(read_excel(input$dataFile$datapath))),
-           stop("Unsupported file type")
-    )
-  })
-  
-  # Render the data table in the UI using DT::renderDataTable
-  output$dataTable <- DT::renderDataTable({
-    req(data())  # Render only when data is available
-    DT::datatable(data(), options = list(pageLength = 10))
-  })
-  
-  # Placeholder for machine learning model application logic
-  observeEvent(input$runModel, {
-    req(data())  # Ensure data is loaded
-    # Example: Applying a pre-trained model
-    # results <- predict(model, newdata = data())
-    # output$modelResults <- renderTable(results)
-  })
-  
-  # Placeholder for generating plots based on user input
-  output$plotOutput <- renderPlot({
-    req(data())  # Ensure data is loaded
-    # Example: Generating a plot
-    # plot(data()$Variable1, data()$Variable2)
+    df <- switch(ext,
+                 csv = read.csv(input$dataFile$datapath),
+                 xlsx = readxl::read_excel(input$dataFile$datapath),
+                 stop("Unsupported file type"))
+    data(df)  # Store the data in reactiveVal
+    output$dataTable <- renderDT({ data() })  # Render the data as a DataTable
   })
 }
 
-# Run the application 
 shinyApp(ui, server)

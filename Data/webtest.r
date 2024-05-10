@@ -6,6 +6,7 @@ library(data.table)      # Efficient data handling
 library(ggplot2)
 library(plotly)
 library(Rtsne)
+library(class)           # For k-NN
 
 # Define the UI
 ui <- dashboardPage(
@@ -73,6 +74,7 @@ server <- function(input, output, session) {
     df <- data()
     updateSelectInput(session, "selectVarX", choices = names(df))
     updateSelectInput(session, "selectVarY", choices = names(df))
+    updateSelectInput(session, "classVar", choices = names(df))
   })
   
   # PCA Plot
@@ -113,6 +115,39 @@ server <- function(input, output, session) {
                  stop("Unsupported file type"))
     data(df)  # Store the data in reactiveVal
     output$dataTable <- renderDT({ data() })  # Render the data as a DataTable
+  })
+  
+  # k-NN Classification
+  observeEvent(input$runClass, {
+    req(data()) # Ensure data is loaded
+    df <- data()
+    
+    # Ensure `target` is a factor and has the correct length
+    target <- factor(df[[input$classVar]], levels = unique(df[[input$classVar]]))
+    
+    # Prepare the dataset for classification, removing the target variable column
+    trainData <- df[, !names(df) %in% input$classVar, drop = FALSE]
+    
+    set.seed(123)  # For reproducibility
+    
+    # Perform k-NN classification
+    model <- knn(train = trainData, test = trainData, cl = target, k = input$kInput)
+    
+    # Output the results
+    output$classResults <- renderTable({
+      data.frame(Actual = target, Prediction = model)
+    })
+  })
+  
+  # k-Means Clustering
+  observeEvent(input$runCluster, {
+    req(data())
+    set.seed(123)  # For reproducibility
+    result <- kmeans(data(), centers = input$clusters)
+    output$clusterPlot <- renderPlot({
+      plot(data(), col = result$cluster)
+      points(result$centers, col = 1:input$clusters, pch = 8, cex = 2)
+    })
   })
 }
 

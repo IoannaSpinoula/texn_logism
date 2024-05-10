@@ -7,8 +7,9 @@ library(ggplot2)
 library(plotly)
 library(Rtsne)
 library(class)           # For k-NN
+library(cluster)
+library(caret)
 
-# Define the UI
 ui <- dashboardPage(
   dashboardHeader(title = "Data Analysis Dashboard"),
   dashboardSidebar(
@@ -17,6 +18,7 @@ ui <- dashboardPage(
       menuItem("Visualization", tabName = "visualization", icon = icon("chart-line")),
       menuItem("Machine Learning - Classification", tabName = "ml_classification", icon = icon("robot")),
       menuItem("Machine Learning - Clustering", tabName = "ml_clustering", icon = icon("sitemap")),
+      menuItem("Results Comparison", tabName = "results_comparison", icon = icon("exchange-alt")),  # Correctly labeled
       menuItem("Information", tabName = "information", icon = icon("info-circle"))
     )
   ),
@@ -27,7 +29,8 @@ ui <- dashboardPage(
                 fileInput("dataFile", "Upload Data", accept = c(".csv", ".xlsx")),
                 actionButton("loadData", "Load Data"),
                 DTOutput("dataTable")
-              )),
+              )
+      ),
       tabItem(tabName = "visualization",
               fluidPage(
                 titlePanel("2D Data Visualizations"),
@@ -38,7 +41,8 @@ ui <- dashboardPage(
                 plotOutput("plotPCA"),
                 plotOutput("plotTSNE"),
                 plotlyOutput("plotEDA")
-              )),
+              )
+      ),
       tabItem(tabName = "ml_classification",
               fluidPage(
                 titlePanel("Classification"),
@@ -46,20 +50,31 @@ ui <- dashboardPage(
                 numericInput("kInput", "Number of Neighbors (k):", value = 3, min = 1),
                 actionButton("runClass", "Run k-NN"),
                 tableOutput("classResults")
-              )),
+              )
+      ),
       tabItem(tabName = "ml_clustering",
               fluidPage(
                 titlePanel("Clustering"),
                 numericInput("clusters", "Number of Clusters:", value = 3, min = 1),
                 actionButton("runCluster", "Run k-means"),
                 plotOutput("clusterPlot")
-              )),
+              )
+      ),
+      tabItem(tabName = "results_comparison",
+              fluidPage(
+                h2("Model Comparisons"),
+                tableOutput("modelCompare"),
+                plotOutput("clustSilhouette"),
+                tableOutput("classConfMatrix")
+              )
+      ),
       tabItem(tabName = "information",
               fluidPage(
                 h2("Application Information"),
                 p("This application was developed for data analysis, to provide a detailed presentation of the algorithm results, including performance metrics, and indicate which algorithms perform best for the analyzed data."),
                 p("Developed by: Ioanna, Despina, Panagiotis")
-              ))
+              )
+      )
     )
   )
 )
@@ -148,6 +163,35 @@ server <- function(input, output, session) {
       plot(data(), col = result$cluster)
       points(result$centers, col = 1:input$clusters, pch = 8, cex = 2)
     })
+  })
+  
+  # Confusion Matrix for Classification
+  output$classConfMatrix <- renderTable({
+    req(data())
+    # Assuming `predicted` is the predicted class column from k-NN
+    confusionMatrix(data$predicted, data[[input$classVar]])$table
+  })
+  
+  # Silhouette Plot for Clustering
+  output$clustSilhouette <- renderPlot({
+    req(data())
+    # Silhouette plot for k-means clustering
+    dists <- dist(data())
+    clusts <- kmeans(dists, centers = input$clusters)
+    sil <- silhouette(clusts$cluster, dists)
+    plot(sil)
+  })
+  
+  # Model Comparison Table
+  output$modelCompare <- renderTable({
+    req(data())
+    # Placeholder: Compare model metrics
+    df <- data.frame(
+      Model = c("Model 1", "Model 2"),
+      Accuracy = c(0.95, 0.92),  # Example values
+      Silhouette = c(0.75, 0.72)  # Example values
+    )
+    df
   })
 }
 

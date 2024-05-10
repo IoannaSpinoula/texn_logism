@@ -1,6 +1,8 @@
 library(shiny)
-library(caret)
-library(shinydashboard)
+library(shinydashboard)  # For dashboard features
+library(readxl)          # For reading Excel files
+library(DT)              # For DataTables
+library(data.table)      # Efficient data handling
 
 # Define the UI
 ui <- dashboardPage(
@@ -16,74 +18,65 @@ ui <- dashboardPage(
     tabItems(
       tabItem(tabName = "data_upload",
               fluidPage(
-                fileInput("dataFile", "Upload CSV", accept = ".csv"),
+                fileInput("dataFile", "Upload data", accept = c(".csv", ".xlsx")),
                 actionButton("loadData", "Load Data"),
-                dataTableOutput("dataTable")
-              )
-      ),
+                DTOutput("dataTable")
+              )),
       tabItem(tabName = "visualization",
               fluidPage(
-                # Placeholder for visualization tools
-                h3("Visualization Tools will be added here")
-              )
-      ),
+                h3("Visualization Tools will be added here"),
+                plotOutput("plotOutput")  # Placeholder for plot outputs
+              )),
       tabItem(tabName = "ml",
               fluidPage(
-                # Display the board as a matrix of buttons or inputs
-                fluidRow(
-                  column(4, offset = 4,
-                         div(class = "grid",
-                             lapply(1:9, function(i) {
-                               selectInput(inputId = paste0("cell", i),
-                                           label = NULL,
-                                           choices = c("Blank" = "b", "X" = "x", "O" = "o"),
-                                           selected = "b",
-                                           width = '80px')
-                             }),
-                             div(class = "btn-center",
-                                 actionButton("predict", "Predict Winner", class = "btn-primary")
-                             )
-                         )
-                  ),
-                  # Output the prediction result
-                  fluidRow(
-                    column(4, offset = 4,
-                           wellPanel(textOutput("prediction"), style = "text-align: center;")
-                    )
-                  )
-                )
-              )
-      )
+                h3("Tic-Tac-Toe Prediction"),
+                actionButton("runModel", "Run Model"),
+                tableOutput("modelResults")  # Placeholder for model results
+              ))
     )
   )
 )
-# Define server logic
-server <- function(input, output) {
+
+# Define the server logic
+server <- function(input, output, session) {
+  
+  # Reactive value to store the data
   data <- reactiveVal()
   
-  observeEvent(input$loadData, {
-    req(input$dataFile)
-    data(read.csv(input$dataFile$datapath))
-    output$dataTable <- renderDataTable({
-      data()
-    })
+  # Observe file upload and read data
+  observeEvent(input$dataFile, {
+    req(input$dataFile)  # Ensure the file is uploaded
+    
+    # Determine the file extension and read data accordingly
+    ext <- tools::file_ext(input$dataFile$datapath)
+    switch(ext,
+           csv = data(read.csv(input$dataFile$datapath)),
+           xlsx = data(as.data.frame(read_excel(input$dataFile$datapath))),
+           stop("Unsupported file type")
+    )
   })
   
-  model <- readRDS("C:/Users/HP i7/Documents/tictactoe/tictactoe/tic_tac_toe_model.rds")
+  # Render the data table in the UI using DT::renderDataTable
+  output$dataTable <- DT::renderDataTable({
+    req(data())  # Render only when data is available
+    DT::datatable(data(), options = list(pageLength = 10))
+  })
   
-  observeEvent(input$predict, {
-    cells <- sapply(1:9, function(i) input[[paste0("cell", i)]])
-    names(cells) <- c("first.left", "first.middle", "first.right",
-                      "second.left", "second.middle", "second.right",
-                      "third.left", "third.middle", "third.right")
-    new_data <- as.data.frame(t(cells), stringsAsFactors = TRUE)
-    new_data[] <- lapply(new_data, factor, levels = c("b", "x", "o"))
-    
-    prediction <- predict(model, new_data)
-    output$prediction <- renderText({
-      paste("Predicted Winner:", ifelse(prediction == "positive", "X", "No clear winner (O or Tie)"))
-    })
+  # Placeholder for machine learning model application logic
+  observeEvent(input$runModel, {
+    req(data())  # Ensure data is loaded
+    # Example: Applying a pre-trained model
+    # results <- predict(model, newdata = data())
+    # output$modelResults <- renderTable(results)
+  })
+  
+  # Placeholder for generating plots based on user input
+  output$plotOutput <- renderPlot({
+    req(data())  # Ensure data is loaded
+    # Example: Generating a plot
+    # plot(data()$Variable1, data()$Variable2)
   })
 }
 
+# Run the application 
 shinyApp(ui, server)

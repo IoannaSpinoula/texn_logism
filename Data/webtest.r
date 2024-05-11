@@ -6,6 +6,11 @@ library(data.table)
 library(ggplot2)
 library(plotly)
 library(Rtsne)
+library(class)
+library(e1071)  # Required for SVM
+library(factoextra)  # Required for spectral clustering
+library(cluster)
+library(caret)
 
 ui <- dashboardPage(
   dashboardHeader(title = "Data Analysis Dashboard"),
@@ -42,7 +47,8 @@ ui <- dashboardPage(
                 titlePanel("Classification"),
                 selectInput("classVar", "Select Target Variable:", choices = NULL),
                 numericInput("kInput", "Number of Neighbors (k):", value = 3, min = 1),
-                actionButton("runClass", "Run k-NN"),
+                uiOutput("classAlg"),  # Updated UI for classification algorithm
+                actionButton("runClass", "Run Classifier"),
                 fluidRow(
                   column(width = 6, tableOutput("classResults")),
                   column(width = 6, tableOutput("confMatrix"))
@@ -52,8 +58,10 @@ ui <- dashboardPage(
       tabItem(tabName = "ml_clustering",
               fluidPage(
                 titlePanel("Clustering"),
+                selectInput("clusterAlg", "Select Clustering Algorithm:",
+                            choices = c("k-means", "Spectral Clustering")),
                 numericInput("clusters", "Number of Clusters:", value = 3, min = 1),
-                actionButton("runCluster", "Run k-means"),
+                actionButton("runCluster", "Run Clustering"),
                 plotOutput("clusterPlot"),
                 plotOutput("silPlot")
               )
@@ -136,7 +144,21 @@ server <- function(input, output, session) {
       })
     }
   })
-  # k-NN Classification
+  
+  
+  #drop down menu for classification algorithms
+  output$classAlg <- renderUI({
+    selectInput("classAlg", "Select Classification Algorithm:",
+                choices = c("k-NN", "SVM"))
+  })
+  
+  # drop down menu for clustering algorithms
+  output$clusterAlg <- renderUI({
+    selectInput("clusterAlg", "Select Clustering Algorithm:",
+                choices = c("k-means", "Spectral Clustering"))
+  })
+  
+  # k-NN and SVM Classification
   observeEvent(input$runClass, {
     req(data()) # Ensure data is loaded
     df <- data()
@@ -144,62 +166,117 @@ server <- function(input, output, session) {
     target <- factor(df[[input$classVar]], levels = unique(df[[input$classVar]]))
     trainData <- df[, !names(df) %in% input$classVar, drop = FALSE]
     
-    set.seed(123)  # For reproducibility
-    
-    model <- knn(train = trainData, test = trainData, cl = target, k = input$kInput)
-    knn_accuracy <- sum(diag(table(target, model))) / nrow(trainData)
-    
-    new_row <- data.frame(
-      Model = "k-NN",
-      Variables = paste(input$selectVarX, input$selectVarY, sep=", "),
-      Neighbors = input$kInput,
-      Accuracy = knn_accuracy
-    )
-    model_results(rbind(model_results(), new_row))
-    
-    output$classResults <- renderTable({
-      data.frame(Actual = target, Prediction = model)
-    })
-    output$confMatrix <- renderTable({
-      confusionMatrix(table(target, model))$table
-    })
+    if (input$classAlg == "k-NN") {
+      set.seed(123)  # For reproducibility
+      
+      model <- knn(train = trainData, test = trainData, cl = target, k = input$kInput)
+      knn_accuracy <- sum(diag(table(target, model))) / nrow(trainData)
+      
+      new_row <- data.frame(
+        Model = "k-NN",
+        Variables = paste(input$selectVarX, input$selectVarY, sep=", "),
+        Neighbors = input$kInput,
+        Accuracy = knn_accuracy
+      )
+      model_results(rbind(model_results(), new_row))
+      
+      output$classResults <- renderTable({
+        data.frame(Actual = target, Prediction = model)
+      })
+      output$confMatrix <- renderTable({
+        confusionMatrix(table(target, model))$table
+      })
+    } else if (input$classAlg == "SVM") {
+      # SVM Model
+      set.seed(123)  # For reproducibility
+      
+      model <- svm(trainData, target)
+      svm_accuracy <- sum(predict(model, trainData) == target) / length(target)
+      
+      new_row <- data.frame(
+        Model = "SVM",
+        Variables = paste(input$selectVarX, input$selectVarY, sep=", "),
+        Accuracy = svm_accuracy
+      )
+      model_results(rbind(model_results(), new_row))
+      
+      output$classResults <- renderTable({
+        data.frame(Actual = target, Prediction = predict(model, trainData))
+      })
+      output$confMatrix <- renderTable({
+        table(Actual = target, Prediction = predict(model, trainData))
+      })
+    }
   })
   
-  # k-Means Clustering
+  # k-Means and Spectral Clustering
   observeEvent(input$runCluster, {
     req(data())  # Ensure data is loaded
     
-    if (input$clusters > nrow(data())) {
-      showModal(modalDialog(
-        title = "Error",
-        "Number of clusters cannot exceed number of observations in the data.",
-        easyClose = TRUE,
-        footer = NULL
-      ))
-      return()
+    if (input$clusterAlg == "k-means") {
+      if (input$clusters > nrow(data())) {
+        showModal(modalDialog(
+          title = "Error",
+          "Number of clusters cannot exceed number of observations in the data.",
+          easyClose = TRUE,
+          footer = NULL
+        ))
+        return()
+      }
+      
+      tryCatch({
+        set.seed(123)  # For reproducibility
+        result <- kmeans(data(), centers = input$clusters)
+        kmeans_result(result)  # Store the k-means result
+        output$clusterPlot <- renderPlot({
+          cols <- rainbow(length(unique(result$cluster)))
+          plot(data(), col = cols[result$cluster])
+          points(result$centers, col = 1:input$clusters, pch = 8, cex = 2)
+        })
+        output$silPlot <- renderPlot({
+          sil <- silhouette(result$cluster, dist(data()))
+          plot(sil, main = "Silhouette Plot")
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("Failed to compute k-means:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
+      })
+    } else if (input$clusterAlg == "Spectral Clustering") {
+      # Spectral Clustering
+      if (input$clusters > nrow(data())) {
+        showModal(modalDialog(
+          title = "Error",
+          "Number of clusters cannot exceed number of observations in the data.",
+          easyClose = TRUE,
+          footer = NULL
+        ))
+        return()
+      }
+      
+      tryCatch({
+        set.seed(123)  # For reproducibility
+        result <- eclust(data(), "kmeans", k = input$clusters, graph = FALSE)
+        output$clusterPlot <- renderPlot({
+          fviz_cluster(result, geom = "point", frame.type = "norm", 
+                       ellipse.type = "norm", ellipse.level = 0.95,
+                       ggtheme = theme_minimal(), main = "Spectral Clustering Plot")
+        })
+        output$silPlot <- renderPlot({
+          plot(silhouette(result$cluster, dist(data())), main = "Silhouette Plot")
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("Failed to compute spectral clustering:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
+      })
     }
-    
-    tryCatch({
-      set.seed(123)  # For reproducibility
-      result <- kmeans(data(), centers = input$clusters)
-      kmeans_result(result)  # Store the k-means result
-      output$clusterPlot <- renderPlot({
-        cols <- rainbow(length(unique(result$cluster)))
-        plot(data(), col = cols[result$cluster])
-        points(result$centers, col = 1:input$clusters, pch = 8, cex = 2)
-      })
-      output$silPlot <- renderPlot({
-        sil <- silhouette(result$cluster, dist(data()))
-        plot(sil, main = "Silhouette Plot")
-      })
-    }, error = function(e) {
-      showModal(modalDialog(
-        title = "Error",
-        paste("Failed to compute k-means:", e$message),
-        easyClose = TRUE,
-        footer = NULL
-      ))
-    })
   })
   
   # Model Comparison Table

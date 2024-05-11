@@ -6,11 +6,6 @@ library(data.table)
 library(ggplot2)
 library(plotly)
 library(Rtsne)
-library(class)
-library(caret)
-library(e1071)  # For SVM
-library(cluster)  # For hierarchical clustering
-library(fpc)  # For silhouette score
 
 ui <- dashboardPage(
   dashboardHeader(title = "Data Analysis Dashboard"),
@@ -36,13 +31,10 @@ ui <- dashboardPage(
       tabItem(tabName = "visualization",
               fluidPage(
                 titlePanel("2D Data Visualizations"),
-                selectInput("selectVarX", "Select X Variable:", choices = NULL),
-                selectInput("selectVarY", "Select Y Variable:", choices = NULL),
-                actionButton("runPCA", "Run PCA"),
-                actionButton("runTSNE", "Run t-SNE"),
-                plotOutput("plotPCA"),
-                plotOutput("plotTSNE"),
-                plotlyOutput("plotEDA")
+                selectInput("plotType", "Select Plot Type:", choices = c("PCA", "t-SNE")),
+                uiOutput("selectVars"),
+                actionButton("runPlot", "Run Plot"),
+                plotOutput("plot")
               )
       ),
       tabItem(tabName = "ml_classification",
@@ -75,7 +67,7 @@ ui <- dashboardPage(
       tabItem(tabName = "information",
               fluidPage(
                 h2("Application Information"),
-                p("This application was developed for data analysis, to provide a detailed presentation of thealgorithm results, including performance metrics, and indicate which algorithms perform best for the analyzed data."),
+                p("This application was developed for data analysis, to provide a detailed presentation of the algorithm results, including performance metrics, and indicate which algorithms perform best for the analyzed data."),
                 p("Developed by: Ioanna, Despina, Panagiotis")
               )
       )
@@ -113,39 +105,37 @@ server <- function(input, output, session) {
     output$dataTable <- renderDT({ data() })  # Render the data as a DataTable
   })
   
-  # PCA Plot
-  observeEvent(input$runPCA, {
+  #drop down menu for visualization
+  output$selectVars <- renderUI({
     req(data())
-    pca_result <- prcomp(data()[, c(input$selectVarX, input$selectVarY)], center = TRUE, scale. = TRUE)
-    output$plotPCA <- renderPlot({
-      biplot(pca_result, main = "PCA Plot")
-    })
+    tagList(
+      selectInput("selectVarX", "Select X Variable:", choices = colnames(data())),
+      selectInput("selectVarY", "Select Y Variable:", choices = colnames(data()))
+    )
   })
   
-  # EDA Plot (Using Plotly for interactive plots)
-  output$plotEDA <- renderPlotly({
-    req(data())
-    # Remove duplicates if necessary
-    plot_data <- unique(data())
-    p <- ggplot(plot_data, aes_string(x = input$selectVarX, y = input$selectVarY)) +
-      geom_point() +
-      geom_smooth(method = "lm", formula = y ~ x) +  # Explicitly using a linear model
-      labs(title = "Scatter Plot with Regression Line")
-    ggplotly(p)
+  observeEvent(input$plotType, {
+    if (input$plotType == "PCA") {
+      observeEvent(input$runPlot, {
+        req(data())
+        pca_result <- prcomp(data()[, c(input$selectVarX, input$selectVarY)], center = TRUE, scale. = TRUE)
+        output$plot <- renderPlot({
+          biplot(pca_result, main = "PCA Plot", xlab = input$selectVarX, ylab = input$selectVarY)
+        })
+      })
+    } else if (input$plotType == "t-SNE") {
+      observeEvent(input$runPlot, {
+        req(data())
+        # Remove duplicate rows to ensure t-SNE runs without issues
+        unique_data <- unique(data()[, c(input$selectVarX, input$selectVarY)])
+        # Run t-SNE
+        tsne_result <- Rtsne(unique_data, dims = 2, check_duplicates = FALSE)  # Additional check for safety
+        output$plot <- renderPlot({
+          plot(tsne_result$Y, main = "t-SNE Plot", xlab = input$selectVarX, ylab = input$selectVarY)
+        })
+      })
+    }
   })
-  
-  # t-SNE Plot
-  observeEvent(input$runTSNE, {
-    req(data())
-    # Remove duplicate rows to ensure t-SNE runs without issues
-    unique_data <- unique(data()[, c(input$selectVarX, input$selectVarY)])
-    # Run t-SNE
-    tsne_result <- Rtsne(unique_data, dims = 2, check_duplicates = FALSE)  # Additional check for safety
-    output$plotTSNE <- renderPlot({
-      plot(tsne_result$Y, main = "t-SNE Plot")
-    })
-  })
-  
   # k-NN Classification
   observeEvent(input$runClass, {
     req(data()) # Ensure data is loaded
@@ -174,6 +164,7 @@ server <- function(input, output, session) {
       confusionMatrix(table(target, model))$table
     })
   })
+  
   # k-Means Clustering
   observeEvent(input$runCluster, {
     req(data())  # Ensure data is loaded

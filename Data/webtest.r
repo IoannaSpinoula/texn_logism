@@ -65,13 +65,17 @@ ui <- dashboardPage(
                 selectInput("xAxis", "Select X-axis Variable:", choices = NULL),
                 selectInput("yAxis", "Select Y-axis Variable:", choices = NULL),
                 actionButton("runVis", "Run Visualization"),
-                plotOutput("visPlot")
+                plotOutput("visPlot"),
+                h3("Exploratory Data Analysis (EDA)"),
+                selectInput("edaVar", "Select Variable for EDA:", choices = NULL),
+                plotOutput("edaPlot")
               )
       ),
       tabItem(tabName = "results_comparison",
               fluidPage(
                 h2("Model Comparisons"),
-                tableOutput("modelCompare")
+                tableOutput("modelCompare"),
+                plotOutput("accuracyPlot")
               )
       ),
       tabItem(tabName = "information",
@@ -103,6 +107,7 @@ server <- function(input, output, session) {
     updateSelectInput(session, "yAxis", choices = names(df))
     updateSelectInput(session, "xClust", choices = names(df))
     updateSelectInput(session, "yClust", choices = names(df))
+    updateSelectInput(session, "edaVar", choices = names(df))
   })
   
   observeEvent(input$runClass, {
@@ -301,8 +306,27 @@ server <- function(input, output, session) {
     }
   })
   
+  observeEvent(input$edaVar, {
+    req(data())
+    df <- data()
+    var <- input$edaVar
+    output$edaPlot <- renderPlot({
+      ggplot(df, aes_string(x = var)) +
+        geom_histogram(binwidth = 30) +
+        labs(title = paste("Histogram of", var), x = var, y = "Frequency")
+    })
+  })
+  
   output$modelCompare <- renderTable({
     model_results()
+  })
+  
+  output$accuracyPlot <- renderPlot({
+    results <- model_results()
+    ggplot(results, aes(x = Model, y = Accuracy, fill = Target)) +
+      geom_bar(stat = "identity", position = position_dodge()) +
+      labs(title = "Model Accuracy Comparison", x = "Model", y = "Accuracy") +
+      theme_minimal()
   })
 }
 

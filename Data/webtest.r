@@ -2,25 +2,24 @@ library(shiny)
 library(shinydashboard)
 library(readxl)
 library(DT)
-library(data.table)
 library(ggplot2)
-library(plotly)
-library(Rtsne)
+library(e1071)
 library(class)
-library(e1071)  # Required for SVM
-library(factoextra)  # Required for spectral clustering
+library(rpart)
 library(cluster)
-library(caret)
+library(kernlab)
+library(Rtsne)
+library(factoextra)
 
 ui <- dashboardPage(
   dashboardHeader(title = "Data Analysis Dashboard"),
   dashboardSidebar(
     sidebarMenu(
       menuItem("Data Upload", tabName = "data_upload", icon = icon("upload")),
-      menuItem("Visualization", tabName = "visualization", icon = icon("chart-line")),
       menuItem("Machine Learning - Classification", tabName = "ml_classification", icon = icon("robot")),
-      menuItem("Machine Learning - Clustering", tabName = "ml_clustering", icon = icon("sitemap")),
-      menuItem("Results Comparison", tabName = "results_comparison", icon = icon("exchange-alt")),  # Correctly labeled
+      menuItem("Machine Learning - Clustering", tabName = "ml_clustering", icon = icon("project-diagram")),
+      menuItem("2D Visualizations", tabName = "visualizations", icon = icon("chart-bar")),
+      menuItem("Results Comparison", tabName = "results_comparison", icon = icon("exchange-alt")),
       menuItem("Information", tabName = "information", icon = icon("info-circle"))
     )
   ),
@@ -33,37 +32,40 @@ ui <- dashboardPage(
                 DTOutput("dataTable")
               )
       ),
-      tabItem(tabName = "visualization",
-              fluidPage(
-                titlePanel("2D Data Visualizations"),
-                selectInput("plotType", "Select Plot Type:", choices = c("PCA", "t-SNE")),
-                uiOutput("selectVars"),
-                actionButton("runPlot", "Run Plot"),
-                plotOutput("plot")
-              )
-      ),
       tabItem(tabName = "ml_classification",
               fluidPage(
                 titlePanel("Classification"),
                 selectInput("classVar", "Select Target Variable:", choices = NULL),
                 numericInput("kInput", "Number of Neighbors (k):", value = 3, min = 1),
-                uiOutput("classAlg"),  # Updated UI for classification algorithm
+                selectInput("classAlg", "Select Classification Algorithm:", choices = c("k-NN", "SVM", "Decision Tree")),
                 actionButton("runClass", "Run Classifier"),
                 fluidRow(
                   column(width = 6, tableOutput("classResults")),
                   column(width = 6, tableOutput("confMatrix"))
-                )
+                ),
+                plotOutput("classPlot")
               )
       ),
       tabItem(tabName = "ml_clustering",
               fluidPage(
                 titlePanel("Clustering"),
-                selectInput("clusterAlg", "Select Clustering Algorithm:",
-                            choices = c("k-means", "Spectral Clustering")),
-                numericInput("clusters", "Number of Clusters:", value = 3, min = 1),
-                actionButton("runCluster", "Run Clustering"),
-                plotOutput("clusterPlot"),
+                selectInput("xClust", "Select X-axis Variable:", choices = NULL),
+                selectInput("yClust", "Select Y-axis Variable:", choices = NULL),
+                numericInput("numClusters", "Number of Clusters:", value = 3, min = 1),
+                selectInput("clustAlg", "Select Clustering Algorithm:", choices = c("k-means", "Hierarchical", "Spectral")),
+                actionButton("runClust", "Run Clustering"),
+                plotOutput("clustPlot"),
                 plotOutput("silPlot")
+              )
+      ),
+      tabItem(tabName = "visualizations",
+              fluidPage(
+                titlePanel("2D Visualizations"),
+                selectInput("visAlg", "Select Visualization Algorithm:", choices = c("PCA", "t-SNE")),
+                selectInput("xAxis", "Select X-axis Variable:", choices = NULL),
+                selectInput("yAxis", "Select Y-axis Variable:", choices = NULL),
+                actionButton("runVis", "Run Visualization"),
+                plotOutput("visPlot")
               )
       ),
       tabItem(tabName = "results_comparison",
@@ -83,196 +85,170 @@ ui <- dashboardPage(
   )
 )
 
-
 server <- function(input, output, session) {
-  # Reactive value for storing data
   data <- reactiveVal()
-  
-  # Reactive value for storing model results
   model_results <- reactiveVal(data.frame())
   
-  # Reactive value for storing k-means result for use in multiple places
-  kmeans_result <- reactiveVal()
-  
-  # Update choices for selectInput once data is read
-  observe({
-    df <- data()
-    updateSelectInput(session, "selectVarX", choices = names(df))
-    updateSelectInput(session, "selectVarY", choices = names(df))
-    updateSelectInput(session, "classVar", choices = names(df))
-  })
-  
-  # Observe file upload and read data
-  observeEvent(input$dataFile, {
+  observeEvent(input$loadData, {
     req(input$dataFile)
     ext <- tools::file_ext(input$dataFile$datapath)
     df <- switch(ext,
                  csv = read.csv(input$dataFile$datapath),
                  xlsx = readxl::read_excel(input$dataFile$datapath),
                  stop("Unsupported file type"))
-    data(df)  # Store the data in reactiveVal
-    output$dataTable <- renderDT({ data() })  # Render the data as a DataTable
+    data(df)
+    output$dataTable <- renderDT({ datatable(df) })
+    updateSelectInput(session, "classVar", choices = names(df))
+    updateSelectInput(session, "xAxis", choices = names(df))
+    updateSelectInput(session, "yAxis", choices = names(df))
+    updateSelectInput(session, "xClust", choices = names(df))
+    updateSelectInput(session, "yClust", choices = names(df))
   })
   
-  #drop down menu for visualization
-  output$selectVars <- renderUI({
-    req(data())
-    tagList(
-      selectInput("selectVarX", "Select X Variable:", choices = colnames(data())),
-      selectInput("selectVarY", "Select Y Variable:", choices = colnames(data()))
-    )
-  })
-  
-  observeEvent(input$plotType, {
-    if (input$plotType == "PCA") {
-      observeEvent(input$runPlot, {
-        req(data())
-        pca_result <- prcomp(data()[, c(input$selectVarX, input$selectVarY)], center = TRUE, scale. = TRUE)
-        output$plot <- renderPlot({
-          biplot(pca_result, main = "PCA Plot", xlab = input$selectVarX, ylab = input$selectVarY)
-        })
-      })
-    } else if (input$plotType == "t-SNE") {
-      observeEvent(input$runPlot, {
-        req(data())
-        # Remove duplicate rows to ensure t-SNE runs without issues
-        unique_data <- unique(data()[, c(input$selectVarX, input$selectVarY)])
-        # Run t-SNE
-        tsne_result <- Rtsne(unique_data, dims = 2, check_duplicates = FALSE)  # Additional check for safety
-        output$plot <- renderPlot({
-          plot(tsne_result$Y, main = "t-SNE Plot", xlab = input$selectVarX, ylab = input$selectVarY)
-        })
-      })
-    }
-  })
-  
-  
-  #drop down menu for classification algorithms
-  output$classAlg <- renderUI({
-    selectInput("classAlg", "Select Classification Algorithm:",
-                choices = c("k-NN", "SVM"))
-  })
-  
-  # drop down menu for clustering algorithms
-  output$clusterAlg <- renderUI({
-    selectInput("clusterAlg", "Select Clustering Algorithm:",
-                choices = c("k-means", "Spectral Clustering"))
-  })
-  
-  # k-NN and SVM Classification
   observeEvent(input$runClass, {
-    req(data()) # Ensure data is loaded
+    req(data())
     df <- data()
-    
-    target <- factor(df[[input$classVar]], levels = unique(df[[input$classVar]]))
-    trainData <- df[, !names(df) %in% input$classVar, drop = FALSE]
+    target <- as.factor(df[[input$classVar]])
+    predictors <- df[, !(names(df) %in% input$classVar), drop = FALSE]
+    predictors <- as.data.frame(lapply(predictors, as.numeric))
     
     if (input$classAlg == "k-NN") {
-      set.seed(123)  # For reproducibility
-      
-      model <- knn(train = trainData, test = trainData, cl = target, k = input$kInput)
-      knn_accuracy <- sum(diag(table(target, model))) / nrow(trainData)
-      
-      new_row <- data.frame(
-        Model = "k-NN",
-        Variables = paste(input$selectVarX, input$selectVarY, sep=", "),
-        Neighbors = input$kInput,
-        Accuracy = knn_accuracy
-      )
-      model_results(rbind(model_results(), new_row))
-      
-      output$classResults <- renderTable({
-        data.frame(Actual = target, Prediction = model)
+      set.seed(123)
+      tryCatch({
+        model <- knn(train = predictors, test = predictors, cl = target, k = input$kInput)
+        accuracy <- sum(model == target) / length(target)
+        new_row <- data.frame(Model = "k-NN", Target = input$classVar, Accuracy = round(accuracy, 4))
+        model_results(rbind(model_results(), new_row))
+        output$classResults <- renderTable({ data.frame(Actual = target, Prediction = model) })
+        output$confMatrix <- renderTable({ table(Actual = target, Prediction = model) })
+        output$classPlot <- renderPlot({
+          ggplot(data.frame(predictors, Actual = target, Prediction = model), aes(x = predictors[,1], y = predictors[,2])) +
+            geom_point(aes(color = Prediction)) +
+            labs(title = "k-NN Classification", x = "Feature 1", y = "Feature 2")
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("k-NN failed:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
       })
-      output$confMatrix <- renderTable({
-        confusionMatrix(table(target, model))$table
+    } else if (input$classAlg == "Decision Tree") {
+      set.seed(123)
+      tryCatch({
+        df_combined <- data.frame(predictors, target = target)
+        model <- rpart(target ~ ., data = df_combined, method = "class")
+        predictions <- predict(model, predictors, type = "class")
+        accuracy <- sum(predictions == target) / length(target)
+        new_row <- data.frame(Model = "Decision Tree", Target = input$classVar, Accuracy = round(accuracy, 4))
+        model_results(rbind(model_results(), new_row))
+        output$classResults <- renderTable({ data.frame(Actual = target, Prediction = predictions) })
+        output$confMatrix <- renderTable({ table(Actual = target, Prediction = predictions) })
+        output$classPlot <- renderPlot({
+          ggplot(data.frame(predictors, Actual = target, Prediction = predictions), aes(x = predictors[,1], y = predictors[,2])) +
+            geom_point(aes(color = Prediction)) +
+            labs(title = "Decision Tree Classification", x = "Feature 1", y = "Feature 2")
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("Decision Tree failed:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
       })
     } else if (input$classAlg == "SVM") {
-      # SVM Model
-      set.seed(123)  # For reproducibility
-      
-      model <- svm(trainData, target)
-      svm_accuracy <- sum(predict(model, trainData) == target) / length(target)
-      
-      new_row <- data.frame(
-        Model = "SVM",
-        Variables = paste(input$selectVarX, input$selectVarY, sep=", "),
-        Accuracy = svm_accuracy
-      )
-      model_results(rbind(model_results(), new_row))
-      
-      output$classResults <- renderTable({
-        data.frame(Actual = target, Prediction = predict(model, trainData))
-      })
-      output$confMatrix <- renderTable({
-        table(Actual = target, Prediction = predict(model, trainData))
+      set.seed(123)
+      tryCatch({
+        model <- svm(as.matrix(predictors), target, kernel = "radial", cost = 1, gamma = 0.1)
+        predictions <- predict(model, as.matrix(predictors))
+        accuracy <- sum(predictions == target) / length(target)
+        new_row <- data.frame(Model = "SVM", Target = input$classVar, Accuracy = round(accuracy, 4))
+        model_results(rbind(model_results(), new_row))
+        output$classResults <- renderTable({ data.frame(Actual = target, Prediction = predictions) })
+        output$confMatrix <- renderTable({ table(Actual = target, Prediction = predictions) })
+        output$classPlot <- renderPlot({
+          ggplot(data.frame(predictors, Actual = target, Prediction = predictions), aes(x = predictors[,1], y = predictors[,2])) +
+            geom_point(aes(color = Prediction)) +
+            labs(title = "SVM Classification", x = "Feature 1", y = "Feature 2")
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("SVM failed:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
       })
     }
   })
   
-  # k-Means and Spectral Clustering
-  observeEvent(input$runCluster, {
-    req(data())  # Ensure data is loaded
+  observeEvent(input$runClust, {
+    req(data())
+    df <- data()
+    x_var <- input$xClust
+    y_var <- input$yClust
+    req(x_var, y_var)
+    predictors <- df[, c(x_var, y_var), drop = FALSE]
+    predictors <- as.data.frame(lapply(predictors, as.numeric))
     
-    if (input$clusterAlg == "k-means") {
-      if (input$clusters > nrow(data())) {
-        showModal(modalDialog(
-          title = "Error",
-          "Number of clusters cannot exceed number of observations in the data.",
-          easyClose = TRUE,
-          footer = NULL
-        ))
-        return()
-      }
-      
+    if (input$clustAlg == "k-means") {
+      set.seed(123)
       tryCatch({
-        set.seed(123)  # For reproducibility
-        result <- kmeans(data(), centers = input$clusters)
-        kmeans_result(result)  # Store the k-means result
-        output$clusterPlot <- renderPlot({
-          cols <- rainbow(length(unique(result$cluster)))
-          plot(data(), col = cols[result$cluster])
-          points(result$centers, col = 1:input$clusters, pch = 8, cex = 2)
+        model <- kmeans(predictors, centers = input$numClusters)
+        output$clustPlot <- renderPlot({
+          ggplot(data.frame(predictors, Cluster = factor(model$cluster)), aes_string(x = x_var, y = y_var)) +
+            geom_point(aes(color = Cluster)) +
+            labs(title = "k-means Clustering", x = x_var, y = y_var)
         })
         output$silPlot <- renderPlot({
-          sil <- silhouette(result$cluster, dist(data()))
-          plot(sil, main = "Silhouette Plot")
+          fviz_silhouette(silhouette(model$cluster, dist(predictors)))
         })
       }, error = function(e) {
         showModal(modalDialog(
           title = "Error",
-          paste("Failed to compute k-means:", e$message),
+          paste("k-means failed:", e$message),
           easyClose = TRUE,
           footer = NULL
         ))
       })
-    } else if (input$clusterAlg == "Spectral Clustering") {
-      # Spectral Clustering
-      if (input$clusters > nrow(data())) {
-        showModal(modalDialog(
-          title = "Error",
-          "Number of clusters cannot exceed number of observations in the data.",
-          easyClose = TRUE,
-          footer = NULL
-        ))
-        return()
-      }
-      
+    } else if (input$clustAlg == "Hierarchical") {
       tryCatch({
-        set.seed(123)  # For reproducibility
-        result <- eclust(data(), "kmeans", k = input$clusters, graph = FALSE)
-        output$clusterPlot <- renderPlot({
-          fviz_cluster(result, geom = "point", frame.type = "norm", 
-                       ellipse.type = "norm", ellipse.level = 0.95,
-                       ggtheme = theme_minimal(), main = "Spectral Clustering Plot")
+        model <- hclust(dist(predictors))
+        clusters <- cutree(model, k = input$numClusters)
+        output$clustPlot <- renderPlot({
+          ggplot(data.frame(predictors, Cluster = factor(clusters)), aes_string(x = x_var, y = y_var)) +
+            geom_point(aes(color = Cluster)) +
+            labs(title = "Hierarchical Clustering", x = x_var, y = y_var)
         })
         output$silPlot <- renderPlot({
-          plot(silhouette(result$cluster, dist(data())), main = "Silhouette Plot")
+          fviz_silhouette(silhouette(clusters, dist(predictors)))
         })
       }, error = function(e) {
         showModal(modalDialog(
           title = "Error",
-          paste("Failed to compute spectral clustering:", e$message),
+          paste("Hierarchical clustering failed:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
+      })
+    } else if (input$clustAlg == "Spectral") {
+      tryCatch({
+        model <- specc(as.matrix(predictors), centers = input$numClusters)
+        clusters <- model@.Data
+        output$clustPlot <- renderPlot({
+          ggplot(data.frame(predictors, Cluster = factor(clusters)), aes_string(x = x_var, y = y_var)) +
+            geom_point(aes(color = Cluster)) +
+            labs(title = "Spectral Clustering", x = x_var, y = y_var)
+        })
+        output$silPlot <- renderPlot({
+          fviz_silhouette(silhouette(clusters, dist(predictors)))
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("Spectral clustering failed:", e$message),
           easyClose = TRUE,
           footer = NULL
         ))
@@ -280,7 +256,51 @@ server <- function(input, output, session) {
     }
   })
   
-  # Model Comparison Table
+  observeEvent(input$runVis, {
+    req(data())
+    df <- data()
+    predictors <- df[, sapply(df, is.numeric)]
+    
+    if (input$visAlg == "PCA") {
+      tryCatch({
+        pca <- prcomp(predictors, scale. = TRUE)
+        pca_df <- data.frame(pca$x)
+        pca_df <- cbind(pca_df, df)
+        output$visPlot <- renderPlot({
+          ggplot(pca_df, aes_string(x = input$xAxis, y = input$yAxis)) +
+            geom_point() +
+            labs(title = "PCA Visualization", x = input$xAxis, y = input$yAxis)
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("PCA failed:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
+      })
+    } else if (input$visAlg == "t-SNE") {
+      tryCatch({
+        tsne <- Rtsne(as.matrix(predictors), dims = 2, perplexity = 30, verbose = TRUE, max_iter = 500)
+        tsne_df <- data.frame(tsne$Y)
+        colnames(tsne_df) <- c("Dim1", "Dim2")
+        tsne_df <- cbind(tsne_df, df)
+        output$visPlot <- renderPlot({
+          ggplot(tsne_df, aes_string(x = input$xAxis, y = input$yAxis)) +
+            geom_point() +
+            labs(title = "t-SNE Visualization", x = input$xAxis, y = input$yAxis)
+        })
+      }, error = function(e) {
+        showModal(modalDialog(
+          title = "Error",
+          paste("t-SNE failed:", e$message),
+          easyClose = TRUE,
+          footer = NULL
+        ))
+      })
+    }
+  })
+  
   output$modelCompare <- renderTable({
     model_results()
   })

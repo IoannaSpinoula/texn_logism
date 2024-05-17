@@ -83,6 +83,7 @@ ui <- dashboardPage(
   )
 )
 
+
 server <- function(input, output, session) {
   # Reactive value for storing data
   data <- reactiveVal()

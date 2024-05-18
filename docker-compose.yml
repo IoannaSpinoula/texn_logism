@@ -1,23 +1,26 @@
 version: '3.5'
 services:
   mysql:
-      image: mysql:8.0.28
-      container_name: techn_logism_sql
-      environment:
-        - MYSQL_HOST=
-        - MYSQL_DATABASE=di_technologies_logismikou_project
-        - MYSQL_USER=webuser
-        - MYSQL_PASSWORD=webpass
-        - MYSQL_ROOT_PASSWORD=rootpass
-        - TZ=EEST
-      ports:
-        - "127.0.0.1:3306:3306"
-      volumes:
-        - ./mysql-init:/docker-entrypoint-initdb.d/:ro
-      networks:
-        - technologies_logismikou_network
+    image: mysql:8.0.28
+    container_name: techn_logism_sql
+    environment:
+      - MYSQL_HOST=
+      - MYSQL_DATABASE=di_technologies_logismikou_project
+      - MYSQL_USER=webuser
+      - MYSQL_PASSWORD=webpass
+      - MYSQL_ROOT_PASSWORD=rootpass
+      - TZ=EEST
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d/:ro
+    networks:
+      - technologies_logismikou_network
+
   php-apache:
-    build: ./
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: techn_logism_php
     ports:
       - "8080:80"
@@ -28,6 +31,15 @@ services:
     networks:
       - technologies_logismikou_network
 
+  shiny-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.shiny
+    container_name: techn_logism_shiny
+    ports:
+      - "3838:3838"
+    networks:
+      - technologies_logismikou_network
       
 networks:
   technologies_logismikou_network:

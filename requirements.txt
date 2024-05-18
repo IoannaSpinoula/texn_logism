@@ -1,0 +1,11 @@
+shiny
+shinydashboard
+readxl
+DT
+ggplot2
+class
+rpart
+Rtsne
+shinycssloaders
+plotly
+caret

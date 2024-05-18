@@ -352,9 +352,9 @@ server <- function(input, output, session) {
           geom_histogram(binwidth = 30) +
           labs(title = paste("Histogram of", var), x = var, y = "Frequency")
       } else if (plot_type == "Boxplot") {
-        ggplot(df, aes_string(x = "", y = var)) +
+        ggplot(df, aes_string(y = var)) +
           geom_boxplot() +
-          labs(title = paste("Boxplot of", var), x = "", y = var)
+          labs(title = paste("Boxplot of", var), y = var)
       } else if (plot_type == "Density Plot") {
         ggplot(df, aes_string(x = var)) +
           geom_density() +
@@ -390,11 +390,3 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui, server)
-
-
-
-
-
-
-
-

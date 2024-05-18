@@ -1,14 +1,3 @@
-library(readxl)
-library(DT)
-library(ggplot2)
-library(class)
-library(rpart)
-library(Rtsne)
-library(shinycssloaders)
-library(plotly)
-library(caret)
-library(shiny)
-
 # Defining the server logic of the app
 server <- function(input, output, session) {
   data <- reactiveVal()  # store the uploaded data

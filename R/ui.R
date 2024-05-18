@@ -1,16 +1,3 @@
-# Loading necessary libraries
-library(shiny)
-library(shinydashboard)
-library(readxl)
-library(DT)
-library(ggplot2)
-library(class)
-library(rpart)
-library(Rtsne)
-library(shinycssloaders)
-library(plotly)
-library(caret)
-
 # Defining the User Interface of the app
 ui <- dashboardPage(
   skin = "blue",  # Setting the color of the dashboard

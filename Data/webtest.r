@@ -137,9 +137,30 @@ ui <- dashboardPage(
       tabItem(tabName = "information",
               fluidPage(
                 box(
-                  title = "Application Information", status = "primary", solidHeader = TRUE, width = 12,
+                  title = "About", status = "primary", solidHeader = TRUE, width = 12,
                   p("This application was developed for data analysis, providing detailed presentations of algorithm results, including performance metrics, and indicating which algorithms perform best for the analyzed data."),
-                  p("Developed by: Ioanna, Despina, Panagiotis")
+                  p("Developed by: Ioanna Spinoula inf2021211 (application and report), Despina Makri inf2021128 (application and report), Panagiotis Traxanas inf2021 (application and report)")
+                ),
+                box(
+                  title="How to use", status = "primary", solidHeader = TRUE, width = 12,
+                  p(HTML("<u><b>Data Upload:</b></u>")),
+                  p("To upload your data click on the 'Browse' button and select a csv file from yor computer. Then click the next button to see your data and load them on the application."),
+                  p(HTML("<u><b>Machine Learning-Classification:</b></u>")),
+                  p("This tab allows you to run Classification Algorithms on your data selecting three values. Firstly, select the targeted variable from the dataset's samples. 
+                    Then select a Classification Algorithm from the two provided (k-NN, Decision Tree). If you choose the k-NN then you should also choose the number of neighbors 
+                    you want. Once you are done with the selection click on the 'Run Classifier' button to see the diagram. "),
+                  p(HTML("<u><b>Machine Learning-Clustering:</b></u>")),
+                  p("In this section two Clustering Algorithms are provided, k-means and Spectral Clustering. Once you select the x and y variables for the for the axes, the algorithm and the number of clusters, 
+                    you can click on the 'Run Clustering' button to see the result."),
+                  p(HTML("<u><b>2D Visualizations:</b></u>")),
+                  p("In this tab two Visualization Algorithms are provided, which are targeting the better understanding of the data contained in the provided file. Select either of the PCA and t-SNE, along with 
+                  the values for x and y axes and then click on the 'Run Visualization' button."),
+                  p(HTML("<u><b>EDA:</b></u>")),
+                  p("The Explatory Data Analisis tab offers three different types of diagrams icluding Histogram, Box Plot and Density Plot. Firstly you need to select the variable you wish and then the diagram type 
+                    you want to see. If you want to see a different diagram for the same variable you should select the variable again."),
+                  p(HTML("<u><b>Results Comparison:</b></u>")),
+                  p("In this section the results of each Classification Algorithm are presented in a table along with their acurracy and the target value. Underneath the table there is a histogram visualizing the 
+                    results with different colors for each value. All you need to do is to run one or more Classification Algorithms on one or more values and then select the 'Results Comparison' tab to view the comparison. ")
                 )
               )
       )

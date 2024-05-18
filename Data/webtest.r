@@ -10,10 +10,15 @@ library(cluster)
 library(kernlab)
 library(Rtsne)
 library(factoextra)
+library(shinycssloaders)
+library(plotly)
 
+# Define the UI
 ui <- dashboardPage(
-  dashboardHeader(title = "Data Analysis Dashboard"),
+  skin = "blue",
+  dashboardHeader(title = "Data Analysis Dashboard", titleWidth = 300),
   dashboardSidebar(
+    width = 300,
     sidebarMenu(
       menuItem("Data Upload", tabName = "data_upload", icon = icon("upload")),
       menuItem("Machine Learning - Classification", tabName = "ml_classification", icon = icon("robot")),
@@ -25,104 +30,117 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
+    tags$head(tags$style(HTML("
+      .box { border-radius: 10px; }
+      .content-wrapper { background-color: #f4f4f4; }
+      .main-header .logo { font-family: 'Lucida Console', Courier, monospace; font-weight: bold; }
+    "))),
     tabItems(
       tabItem(tabName = "data_upload",
               fluidPage(
-                h3("Data Upload"),
-                p("Upload your CSV or Excel file to get started with data analysis."),
-                fileInput("dataFile", "Upload Data", accept = c(".csv", ".xlsx")),
-                actionButton("loadData", "Load Data"),
-                DTOutput("dataTable")
+                box(
+                  title = "Data Upload", status = "primary", solidHeader = TRUE, width = 12,
+                  p("Upload your CSV or Excel file to get started with data analysis."),
+                  fileInput("dataFile", "Upload Data", accept = c(".csv", ".xlsx")),
+                  actionButton("loadData", "Load Data", class = "btn-primary"),
+                  DTOutput("dataTable") %>% withSpinner(color="#0dc5c1")
+                )
               )
       ),
       tabItem(tabName = "ml_classification",
               fluidPage(
-                titlePanel("Classification"),
-                p("This tab allows you to run classification algorithms on your dataset. Classification algorithms are used to predict a categorical label for each sample."),
-                p("Algorithms:"),
-                tags$ul(
-                  tags$li(tags$b("k-Nearest Neighbors (k-NN):"), " A simple, instance-based learning algorithm. It classifies samples based on the majority class among the k-nearest neighbors."),
-                  tags$li(tags$b("Support Vector Machine (SVM):"), " A powerful classification algorithm that finds the hyperplane that best separates the classes in the feature space."),
-                  tags$li(tags$b("Decision Tree:"), " A tree-based algorithm that splits the data into branches to make decisions based on feature values.")
-                ),
-                selectInput("classVar", "Select Target Variable:", choices = NULL),
-                numericInput("kInput", "Number of Neighbors (k) for k-NN:", value = 3, min = 1),
-                selectInput("classAlg", "Select Classification Algorithm:", choices = c("k-NN", "SVM", "Decision Tree")),
-                actionButton("runClass", "Run Classifier"),
-                plotOutput("classPlot"),
-                fluidRow(
-                  column(width = 6, tableOutput("classResults")),
-                  column(width = 6, tableOutput("confMatrix"))
+                box(
+                  title = "Classification", status = "primary", solidHeader = TRUE, width = 12,
+                  p("This tab allows you to run classification algorithms on your dataset."),
+                  fluidRow(
+                    column(6, selectInput("classVar", "Select Target Variable:", choices = NULL)),
+                    column(6, numericInput("kInput", "Number of Neighbors (k) for k-NN:", value = 3, min = 1))
+                  ),
+                  fluidRow(
+                    column(6, selectInput("classAlg", "Select Classification Algorithm:", choices = c("k-NN", "SVM", "Decision Tree"))),
+                    column(6, actionButton("runClass", "Run Classifier", class = "btn-primary"))
+                  ),
+                  plotlyOutput("classPlot") %>% withSpinner(color="#0dc5c1"),
+                  fluidRow(
+                    column(width = 6, tableOutput("classResults")),
+                    column(width = 6, tableOutput("confMatrix"))
+                  )
                 )
               )
       ),
       tabItem(tabName = "ml_clustering",
               fluidPage(
-                titlePanel("Clustering"),
-                p("This tab allows you to run clustering algorithms on your dataset. Clustering algorithms group similar samples together based on feature similarities."),
-                p("Algorithms:"),
-                tags$ul(
-                  tags$li(tags$b("k-means:"), " A partitioning method that divides the data into k clusters by minimizing the variance within each cluster."),
-                  tags$li(tags$b("Hierarchical:"), " Builds a hierarchy of clusters either from the bottom-up (agglomerative) or top-down (divisive)."),
-                  tags$li(tags$b("Spectral:"), " Uses eigenvalues of a similarity matrix to perform dimensionality reduction before clustering in fewer dimensions.")
-                ),
-                selectInput("xClust", "Select X-axis Variable:", choices = NULL),
-                selectInput("yClust", "Select Y-axis Variable:", choices = NULL),
-                numericInput("numClusters", "Number of Clusters:", value = 3, min = 1),
-                selectInput("clustAlg", "Select Clustering Algorithm:", choices = c("k-means", "Hierarchical", "Spectral")),
-                actionButton("runClust", "Run Clustering"),
-                plotOutput("clustPlot"),
-                plotOutput("silPlot")
+                box(
+                  title = "Clustering", status = "primary", solidHeader = TRUE, width = 12,
+                  p("This tab allows you to run clustering algorithms on your dataset."),
+                  fluidRow(
+                    column(6, selectInput("xClust", "Select X-axis Variable:", choices = NULL)),
+                    column(6, selectInput("yClust", "Select Y-axis Variable:", choices = NULL))
+                  ),
+                  fluidRow(
+                    column(6, numericInput("numClusters", "Number of Clusters:", value = 3, min = 1)),
+                    column(6, selectInput("clustAlg", "Select Clustering Algorithm:", choices = c("k-means", "Hierarchical", "Spectral")))
+                  ),
+                  actionButton("runClust", "Run Clustering", class = "btn-primary"),
+                  plotlyOutput("clustPlot") %>% withSpinner(color="#0dc5c1"),
+                  plotlyOutput("silPlot") %>% withSpinner(color="#0dc5c1")
+                )
               )
       ),
       tabItem(tabName = "visualizations",
               fluidPage(
-                titlePanel("2D Visualizations"),
-                p("This tab allows you to visualize your data using dimensionality reduction techniques."),
-                p("Algorithms:"),
-                tags$ul(
-                  tags$li(tags$b("Principal Component Analysis (PCA):"), " Reduces the dimensionality of the data by projecting it onto the principal components."),
-                  tags$li(tags$b("t-Distributed Stochastic Neighbor Embedding (t-SNE):"), " A non-linear technique that reduces dimensionality while preserving the local structure of the data.")
-                ),
-                selectInput("visAlg", "Select Visualization Algorithm:", choices = c("PCA", "t-SNE")),
-                conditionalPanel(
-                  condition = "input.visAlg == 'PCA'",
-                  selectInput("xAxis", "Select X-axis Variable:", choices = NULL),
-                  selectInput("yAxis", "Select Y-axis Variable:", choices = NULL)
-                ),
-                actionButton("runVis", "Run Visualization"),
-                plotOutput("visPlot")
+                box(
+                  title = "2D Visualizations", status = "primary", solidHeader = TRUE, width = 12,
+                  p("This tab allows you to visualize your data using dimensionality reduction techniques."),
+                  selectInput("visAlg", "Select Visualization Algorithm:", choices = c("PCA", "t-SNE")),
+                  conditionalPanel(
+                    condition = "input.visAlg == 'PCA'",
+                    fluidRow(
+                      column(6, selectInput("xAxis", "Select X-axis Variable:", choices = NULL)),
+                      column(6, selectInput("yAxis", "Select Y-axis Variable:", choices = NULL))
+                    )
+                  ),
+                  actionButton("runVis", "Run Visualization", class = "btn-primary"),
+                  plotlyOutput("visPlot") %>% withSpinner(color="#0dc5c1")
+                )
               )
       ),
       tabItem(tabName = "eda",
               fluidPage(
-                titlePanel("Exploratory Data Analysis (EDA)"),
-                p("This tab allows you to perform exploratory data analysis. Select a variable and a type of plot to generate various EDA plots."),
-                selectInput("edaVar", "Select Variable for EDA:", choices = NULL),
-                selectInput("edaPlotType", "Select Plot Type:", choices = c("Histogram", "Boxplot", "Density Plot")),
-                plotOutput("edaPlot")
+                box(
+                  title = "Exploratory Data Analysis (EDA)", status = "primary", solidHeader = TRUE, width = 12,
+                  p("This tab allows you to perform exploratory data analysis."),
+                  selectInput("edaVar", "Select Variable for EDA:", choices = NULL),
+                  selectInput("edaPlotType", "Select Plot Type:", choices = c("Histogram", "Boxplot", "Density Plot")),
+                  plotlyOutput("edaPlot") %>% withSpinner(color="#0dc5c1")
+                )
               )
       ),
       tabItem(tabName = "results_comparison",
               fluidPage(
-                h2("Model Comparisons"),
-                p("This tab provides a detailed comparison of the performance of different models. The model with the highest accuracy is recommended."),
-                tableOutput("modelCompare"),
-                plotOutput("accuracyPlot"),
-                textOutput("comparisonText")
+                box(
+                  title = "Model Comparisons", status = "primary", solidHeader = TRUE, width = 12,
+                  p("This tab provides a detailed comparison of the performance of different models. The model with the highest accuracy is recommended."),
+                  tableOutput("modelCompare"),
+                  plotlyOutput("accuracyPlot") %>% withSpinner(color="#0dc5c1"),
+                  textOutput("comparisonText")
+                )
               )
       ),
       tabItem(tabName = "information",
               fluidPage(
-                h2("Application Information"),
-                p("This application was developed for data analysis, providing detailed presentations of algorithm results, including performance metrics, and indicating which algorithms perform best for the analyzed data."),
-                p("Developed by: Ioanna, Despina, Panagiotis")
+                box(
+                  title = "Application Information", status = "primary", solidHeader = TRUE, width = 12,
+                  p("This application was developed for data analysis, providing detailed presentations of algorithm results, including performance metrics, and indicating which algorithms perform best for the analyzed data."),
+                  p("Developed by: Ioanna, Despina, Panagiotis")
+                )
               )
       )
     )
   )
 )
 
+# Define the server logic
 server <- function(input, output, session) {
   data <- reactiveVal()
   model_results <- reactiveVal(data.frame())
@@ -160,7 +178,7 @@ server <- function(input, output, session) {
         model_results(rbind(model_results(), new_row))
         output$classResults <- renderTable({ data.frame(Actual = target, Prediction = model) })
         output$confMatrix <- renderTable({ table(Actual = target, Prediction = model) })
-        output$classPlot <- renderPlot({
+        output$classPlot <- renderPlotly({
           ggplot(data.frame(predictors, Actual = target, Prediction = model), aes(x = predictors[,1], y = predictors[,2])) +
             geom_point(aes(color = Prediction)) +
             labs(title = "k-NN Classification", x = "Feature 1", y = "Feature 2")
@@ -184,7 +202,7 @@ server <- function(input, output, session) {
         model_results(rbind(model_results(), new_row))
         output$classResults <- renderTable({ data.frame(Actual = target, Prediction = predictions) })
         output$confMatrix <- renderTable({ table(Actual = target, Prediction = predictions) })
-        output$classPlot <- renderPlot({
+        output$classPlot <- renderPlotly({
           ggplot(data.frame(predictors, Actual = target, Prediction = predictions), aes(x = predictors[,1], y = predictors[,2])) +
             geom_point(aes(color = Prediction)) +
             labs(title = "Decision Tree Classification", x = "Feature 1", y = "Feature 2")
@@ -207,7 +225,7 @@ server <- function(input, output, session) {
         model_results(rbind(model_results(), new_row))
         output$classResults <- renderTable({ data.frame(Actual = target, Prediction = predictions) })
         output$confMatrix <- renderTable({ table(Actual = target, Prediction = predictions) })
-        output$classPlot <- renderPlot({
+        output$classPlot <- renderPlotly({
           ggplot(data.frame(predictors, Actual = target, Prediction = predictions), aes(x = predictors[,1], y = predictors[,2])) +
             geom_point(aes(color = Prediction)) +
             labs(title = "SVM Classification", x = "Feature 1", y = "Feature 2")
@@ -236,12 +254,12 @@ server <- function(input, output, session) {
       set.seed(123)
       tryCatch({
         model <- kmeans(predictors, centers = input$numClusters)
-        output$clustPlot <- renderPlot({
+        output$clustPlot <- renderPlotly({
           ggplot(data.frame(predictors, Cluster = factor(model$cluster)), aes_string(x = x_var, y = y_var)) +
             geom_point(aes(color = Cluster)) +
             labs(title = "k-means Clustering", x = x_var, y = y_var)
         })
-        output$silPlot <- renderPlot({
+        output$silPlot <- renderPlotly({
           fviz_silhouette(silhouette(model$cluster, dist(predictors)))
         })
       }, error = function(e) {
@@ -256,12 +274,12 @@ server <- function(input, output, session) {
       tryCatch({
         model <- hclust(dist(predictors))
         clusters <- cutree(model, k = input$numClusters)
-        output$clustPlot <- renderPlot({
+        output$clustPlot <- renderPlotly({
           ggplot(data.frame(predictors, Cluster = factor(clusters)), aes_string(x = x_var, y = y_var)) +
             geom_point(aes(color = Cluster)) +
             labs(title = "Hierarchical Clustering", x = x_var, y = y_var)
         })
-        output$silPlot <- renderPlot({
+        output$silPlot <- renderPlotly({
           fviz_silhouette(silhouette(clusters, dist(predictors)))
         })
       }, error = function(e) {
@@ -276,12 +294,12 @@ server <- function(input, output, session) {
       tryCatch({
         model <- specc(as.matrix(predictors), centers = input$numClusters)
         clusters <- model@.Data
-        output$clustPlot <- renderPlot({
+        output$clustPlot <- renderPlotly({
           ggplot(data.frame(predictors, Cluster = factor(clusters)), aes_string(x = x_var, y = y_var)) +
             geom_point(aes(color = Cluster)) +
             labs(title = "Spectral Clustering", x = x_var, y = y_var)
         })
-        output$silPlot <- renderPlot({
+        output$silPlot <- renderPlotly({
           fviz_silhouette(silhouette(clusters, dist(predictors)))
         })
       }, error = function(e) {
@@ -306,7 +324,7 @@ server <- function(input, output, session) {
         pca <- prcomp(predictors, scale. = TRUE)
         pca_df <- data.frame(pca$x)
         pca_df <- cbind(pca_df, df)
-        output$visPlot <- renderPlot({
+        output$visPlot <- renderPlotly({
           ggplot(pca_df, aes_string(x = input$xAxis, y = input$yAxis)) +
             geom_point() +
             labs(title = "PCA Visualization", x = input$xAxis, y = input$yAxis)
@@ -325,7 +343,7 @@ server <- function(input, output, session) {
         tsne_df <- data.frame(tsne$Y)
         colnames(tsne_df) <- c("Dim1", "Dim2")
         tsne_df <- cbind(tsne_df, df)
-        output$visPlot <- renderPlot({
+        output$visPlot <- renderPlotly({
           ggplot(tsne_df, aes(x = Dim1, y = Dim2)) +
             geom_point() +
             labs(title = "t-SNE Visualization", x = "Dim1", y = "Dim2")
@@ -346,7 +364,7 @@ server <- function(input, output, session) {
     df <- data()
     var <- input$edaVar
     plot_type <- input$edaPlotType
-    output$edaPlot <- renderPlot({
+    output$edaPlot <- renderPlotly({
       if (plot_type == "Histogram") {
         ggplot(df, aes_string(x = var)) +
           geom_histogram(binwidth = 30) +
@@ -367,7 +385,7 @@ server <- function(input, output, session) {
     model_results()
   })
   
-  output$accuracyPlot <- renderPlot({
+  output$accuracyPlot <- renderPlotly({
     results <- model_results()
     ggplot(results, aes(x = Model, y = Accuracy, fill = Target)) +
       geom_bar(stat = "identity", position = position_dodge()) +

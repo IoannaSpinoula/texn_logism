@@ -12,6 +12,7 @@ library(Rtsne)
 library(factoextra)
 library(shinycssloaders)
 library(plotly)
+library(caret)
 
 # Define the UI
 ui <- dashboardPage(
@@ -52,6 +53,7 @@ ui <- dashboardPage(
                 box(
                   title = "Classification", status = "primary", solidHeader = TRUE, width = 12,
                   p("This tab allows you to run classification algorithms on your dataset."),
+                  p("Classification algorithms categorize data points into predefined classes. Select a target variable (the variable you want to predict) and an algorithm, then run the classifier."),
                   fluidRow(
                     column(6, selectInput("classVar", "Select Target Variable:", choices = NULL)),
                     column(6, numericInput("kInput", "Number of Neighbors (k) for k-NN:", value = 3, min = 1))
@@ -64,7 +66,8 @@ ui <- dashboardPage(
                   fluidRow(
                     column(width = 6, tableOutput("classResults")),
                     column(width = 6, tableOutput("confMatrix"))
-                  )
+                  ),
+                  tableOutput("perfMetrics")
                 )
               )
       ),
@@ -73,6 +76,7 @@ ui <- dashboardPage(
                 box(
                   title = "Clustering", status = "primary", solidHeader = TRUE, width = 12,
                   p("This tab allows you to run clustering algorithms on your dataset."),
+                  p("Clustering algorithms group data points into clusters based on their similarity. Select variables for the x and y axes, a clustering algorithm, and the number of clusters, then run the clustering."),
                   fluidRow(
                     column(6, selectInput("xClust", "Select X-axis Variable:", choices = NULL)),
                     column(6, selectInput("yClust", "Select Y-axis Variable:", choices = NULL))
@@ -92,6 +96,7 @@ ui <- dashboardPage(
                 box(
                   title = "2D Visualizations", status = "primary", solidHeader = TRUE, width = 12,
                   p("This tab allows you to visualize your data using dimensionality reduction techniques."),
+                  p("Dimensionality reduction techniques like PCA and t-SNE reduce the number of variables in your data, making it easier to visualize. Select a technique and run the visualization."),
                   selectInput("visAlg", "Select Visualization Algorithm:", choices = c("PCA", "t-SNE")),
                   conditionalPanel(
                     condition = "input.visAlg == 'PCA'",
@@ -110,6 +115,7 @@ ui <- dashboardPage(
                 box(
                   title = "Exploratory Data Analysis (EDA)", status = "primary", solidHeader = TRUE, width = 12,
                   p("This tab allows you to perform exploratory data analysis."),
+                  p("EDA helps you understand the distribution and relationships in your data. Select a variable and a plot type to visualize the data."),
                   selectInput("edaVar", "Select Variable for EDA:", choices = NULL),
                   selectInput("edaPlotType", "Select Plot Type:", choices = c("Histogram", "Boxplot", "Density Plot")),
                   plotlyOutput("edaPlot") %>% withSpinner(color="#0dc5c1")
@@ -174,10 +180,17 @@ server <- function(input, output, session) {
       tryCatch({
         model <- knn(train = predictors, test = predictors, cl = target, k = input$kInput)
         accuracy <- sum(model == target) / length(target)
+        cm <- confusionMatrix(factor(model), target)
         new_row <- data.frame(Model = "k-NN", Target = input$classVar, Accuracy = round(accuracy, 4))
         model_results(rbind(model_results(), new_row))
         output$classResults <- renderTable({ data.frame(Actual = target, Prediction = model) })
-        output$confMatrix <- renderTable({ table(Actual = target, Prediction = model) })
+        output$confMatrix <- renderTable({ cm$table })
+        output$perfMetrics <- renderTable({
+          data.frame(
+            Metric = c("Accuracy", "Sensitivity", "Specificity"),
+            Value = c(round(cm$overall['Accuracy'], 4), round(cm$byClass['Sensitivity'], 4), round(cm$byClass['Specificity'], 4))
+          )
+        })
         output$classPlot <- renderPlotly({
           ggplot(data.frame(predictors, Actual = target, Prediction = model), aes(x = predictors[,1], y = predictors[,2])) +
             geom_point(aes(color = Prediction)) +
@@ -198,10 +211,17 @@ server <- function(input, output, session) {
         model <- rpart(target ~ ., data = df_combined, method = "class")
         predictions <- predict(model, predictors, type = "class")
         accuracy <- sum(predictions == target) / length(target)
+        cm <- confusionMatrix(factor(predictions), target)
         new_row <- data.frame(Model = "Decision Tree", Target = input$classVar, Accuracy = round(accuracy, 4))
         model_results(rbind(model_results(), new_row))
         output$classResults <- renderTable({ data.frame(Actual = target, Prediction = predictions) })
-        output$confMatrix <- renderTable({ table(Actual = target, Prediction = predictions) })
+        output$confMatrix <- renderTable({ cm$table })
+        output$perfMetrics <- renderTable({
+          data.frame(
+            Metric = c("Accuracy", "Sensitivity", "Specificity"),
+            Value = c(round(cm$overall['Accuracy'], 4), round(cm$byClass['Sensitivity'], 4), round(cm$byClass['Specificity'], 4))
+          )
+        })
         output$classPlot <- renderPlotly({
           ggplot(data.frame(predictors, Actual = target, Prediction = predictions), aes(x = predictors[,1], y = predictors[,2])) +
             geom_point(aes(color = Prediction)) +
@@ -221,10 +241,17 @@ server <- function(input, output, session) {
         model <- svm(as.matrix(predictors), target, kernel = "radial", cost = 1, gamma = 0.1)
         predictions <- predict(model, as.matrix(predictors))
         accuracy <- sum(predictions == target) / length(target)
+        cm <- confusionMatrix(factor(predictions), target)
         new_row <- data.frame(Model = "SVM", Target = input$classVar, Accuracy = round(accuracy, 4))
         model_results(rbind(model_results(), new_row))
         output$classResults <- renderTable({ data.frame(Actual = target, Prediction = predictions) })
-        output$confMatrix <- renderTable({ table(Actual = target, Prediction = predictions) })
+        output$confMatrix <- renderTable({ cm$table })
+        output$perfMetrics <- renderTable({
+          data.frame(
+            Metric = c("Accuracy", "Sensitivity", "Specificity"),
+            Value = c(round(cm$overall['Accuracy'], 4), round(cm$byClass['Sensitivity'], 4), round(cm$byClass['Specificity'], 4))
+          )
+        })
         output$classPlot <- renderPlotly({
           ggplot(data.frame(predictors, Actual = target, Prediction = predictions), aes(x = predictors[,1], y = predictors[,2])) +
             geom_point(aes(color = Prediction)) +

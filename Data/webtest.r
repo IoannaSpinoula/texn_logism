@@ -35,6 +35,7 @@ ui <- dashboardPage(
       .box { border-radius: 10px; }
       .content-wrapper { background-color: #f4f4f4; }
       .main-header .logo { font-family: 'Lucida Console', Courier, monospace; font-weight: bold; }
+      .dataTables_wrapper .dataTables_scrollBody { width: 100%; }
     "))),
     tabItems(
       tabItem(tabName = "data_upload",
@@ -159,7 +160,7 @@ server <- function(input, output, session) {
                  xlsx = readxl::read_excel(input$dataFile$datapath),
                  stop("Unsupported file type"))
     data(df)
-    output$dataTable <- renderDT({ datatable(df) })
+    output$dataTable <- renderDT({ datatable(df, options = list(scrollX = TRUE)) })
     updateSelectInput(session, "classVar", choices = names(df))
     updateSelectInput(session, "xAxis", choices = names(df))
     updateSelectInput(session, "yAxis", choices = names(df))

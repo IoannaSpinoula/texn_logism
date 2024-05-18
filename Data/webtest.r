@@ -19,6 +19,7 @@ ui <- dashboardPage(
       menuItem("Machine Learning - Classification", tabName = "ml_classification", icon = icon("robot")),
       menuItem("Machine Learning - Clustering", tabName = "ml_clustering", icon = icon("project-diagram")),
       menuItem("2D Visualizations", tabName = "visualizations", icon = icon("chart-bar")),
+      menuItem("Exploratory Data Analysis (EDA)", tabName = "eda", icon = icon("search")),
       menuItem("Results Comparison", tabName = "results_comparison", icon = icon("exchange-alt")),
       menuItem("Information", tabName = "information", icon = icon("info-circle"))
     )
@@ -27,6 +28,8 @@ ui <- dashboardPage(
     tabItems(
       tabItem(tabName = "data_upload",
               fluidPage(
+                h3("Data Upload"),
+                p("Upload your CSV or Excel file to get started with data analysis."),
                 fileInput("dataFile", "Upload Data", accept = c(".csv", ".xlsx")),
                 actionButton("loadData", "Load Data"),
                 DTOutput("dataTable")
@@ -35,20 +38,34 @@ ui <- dashboardPage(
       tabItem(tabName = "ml_classification",
               fluidPage(
                 titlePanel("Classification"),
+                p("This tab allows you to run classification algorithms on your dataset. Classification algorithms are used to predict a categorical label for each sample."),
+                p("Algorithms:"),
+                tags$ul(
+                  tags$li(tags$b("k-Nearest Neighbors (k-NN):"), " A simple, instance-based learning algorithm. It classifies samples based on the majority class among the k-nearest neighbors."),
+                  tags$li(tags$b("Support Vector Machine (SVM):"), " A powerful classification algorithm that finds the hyperplane that best separates the classes in the feature space."),
+                  tags$li(tags$b("Decision Tree:"), " A tree-based algorithm that splits the data into branches to make decisions based on feature values.")
+                ),
                 selectInput("classVar", "Select Target Variable:", choices = NULL),
-                numericInput("kInput", "Number of Neighbors (k):", value = 3, min = 1),
+                numericInput("kInput", "Number of Neighbors (k) for k-NN:", value = 3, min = 1),
                 selectInput("classAlg", "Select Classification Algorithm:", choices = c("k-NN", "SVM", "Decision Tree")),
                 actionButton("runClass", "Run Classifier"),
+                plotOutput("classPlot"),
                 fluidRow(
                   column(width = 6, tableOutput("classResults")),
                   column(width = 6, tableOutput("confMatrix"))
-                ),
-                plotOutput("classPlot")
+                )
               )
       ),
       tabItem(tabName = "ml_clustering",
               fluidPage(
                 titlePanel("Clustering"),
+                p("This tab allows you to run clustering algorithms on your dataset. Clustering algorithms group similar samples together based on feature similarities."),
+                p("Algorithms:"),
+                tags$ul(
+                  tags$li(tags$b("k-means:"), " A partitioning method that divides the data into k clusters by minimizing the variance within each cluster."),
+                  tags$li(tags$b("Hierarchical:"), " Builds a hierarchy of clusters either from the bottom-up (agglomerative) or top-down (divisive)."),
+                  tags$li(tags$b("Spectral:"), " Uses eigenvalues of a similarity matrix to perform dimensionality reduction before clustering in fewer dimensions.")
+                ),
                 selectInput("xClust", "Select X-axis Variable:", choices = NULL),
                 selectInput("yClust", "Select Y-axis Variable:", choices = NULL),
                 numericInput("numClusters", "Number of Clusters:", value = 3, min = 1),
@@ -61,27 +78,44 @@ ui <- dashboardPage(
       tabItem(tabName = "visualizations",
               fluidPage(
                 titlePanel("2D Visualizations"),
+                p("This tab allows you to visualize your data using dimensionality reduction techniques."),
+                p("Algorithms:"),
+                tags$ul(
+                  tags$li(tags$b("Principal Component Analysis (PCA):"), " Reduces the dimensionality of the data by projecting it onto the principal components."),
+                  tags$li(tags$b("t-Distributed Stochastic Neighbor Embedding (t-SNE):"), " A non-linear technique that reduces dimensionality while preserving the local structure of the data.")
+                ),
                 selectInput("visAlg", "Select Visualization Algorithm:", choices = c("PCA", "t-SNE")),
-                selectInput("xAxis", "Select X-axis Variable:", choices = NULL),
-                selectInput("yAxis", "Select Y-axis Variable:", choices = NULL),
+                conditionalPanel(
+                  condition = "input.visAlg == 'PCA'",
+                  selectInput("xAxis", "Select X-axis Variable:", choices = NULL),
+                  selectInput("yAxis", "Select Y-axis Variable:", choices = NULL)
+                ),
                 actionButton("runVis", "Run Visualization"),
-                plotOutput("visPlot"),
-                h3("Exploratory Data Analysis (EDA)"),
+                plotOutput("visPlot")
+              )
+      ),
+      tabItem(tabName = "eda",
+              fluidPage(
+                titlePanel("Exploratory Data Analysis (EDA)"),
+                p("This tab allows you to perform exploratory data analysis. Select a variable and a type of plot to generate various EDA plots."),
                 selectInput("edaVar", "Select Variable for EDA:", choices = NULL),
+                selectInput("edaPlotType", "Select Plot Type:", choices = c("Histogram", "Boxplot", "Density Plot")),
                 plotOutput("edaPlot")
               )
       ),
       tabItem(tabName = "results_comparison",
               fluidPage(
                 h2("Model Comparisons"),
+                p("This tab provides a detailed comparison of the performance of different models. The model with the highest accuracy is recommended."),
                 tableOutput("modelCompare"),
-                plotOutput("accuracyPlot")
+                plotOutput("accuracyPlot"),
+                textOutput("comparisonText")
               )
       ),
       tabItem(tabName = "information",
               fluidPage(
                 h2("Application Information"),
-                p("This application was developed for data analysis, to provide a detailed presentation of the algorithm results, including performance metrics, and indicate which algorithms perform best for the analyzed data."),
+                p("This application was developed for data analysis, providing detailed presentations of algorithm results, including performance metrics, and indicating which algorithms perform best for the analyzed data."),
                 p("Developed by: Ioanna, Despina, Panagiotis")
               )
       )
@@ -267,6 +301,7 @@ server <- function(input, output, session) {
     predictors <- df[, sapply(df, is.numeric)]
     
     if (input$visAlg == "PCA") {
+      req(input$xAxis, input$yAxis)
       tryCatch({
         pca <- prcomp(predictors, scale. = TRUE)
         pca_df <- data.frame(pca$x)
@@ -286,14 +321,14 @@ server <- function(input, output, session) {
       })
     } else if (input$visAlg == "t-SNE") {
       tryCatch({
-        tsne <- Rtsne(as.matrix(predictors), dims = 2, perplexity = 30, verbose = TRUE, max_iter = 500)
+        tsne <- Rtsne(as.matrix(predictors), dims = 2, perplexity = 30, verbose = FALSE, max_iter = 500)
         tsne_df <- data.frame(tsne$Y)
         colnames(tsne_df) <- c("Dim1", "Dim2")
         tsne_df <- cbind(tsne_df, df)
         output$visPlot <- renderPlot({
-          ggplot(tsne_df, aes_string(x = input$xAxis, y = input$yAxis)) +
+          ggplot(tsne_df, aes(x = Dim1, y = Dim2)) +
             geom_point() +
-            labs(title = "t-SNE Visualization", x = input$xAxis, y = input$yAxis)
+            labs(title = "t-SNE Visualization", x = "Dim1", y = "Dim2")
         })
       }, error = function(e) {
         showModal(modalDialog(
@@ -310,10 +345,21 @@ server <- function(input, output, session) {
     req(data())
     df <- data()
     var <- input$edaVar
+    plot_type <- input$edaPlotType
     output$edaPlot <- renderPlot({
-      ggplot(df, aes_string(x = var)) +
-        geom_histogram(binwidth = 30) +
-        labs(title = paste("Histogram of", var), x = var, y = "Frequency")
+      if (plot_type == "Histogram") {
+        ggplot(df, aes_string(x = var)) +
+          geom_histogram(binwidth = 30) +
+          labs(title = paste("Histogram of", var), x = var, y = "Frequency")
+      } else if (plot_type == "Boxplot") {
+        ggplot(df, aes_string(x = "", y = var)) +
+          geom_boxplot() +
+          labs(title = paste("Boxplot of", var), x = "", y = var)
+      } else if (plot_type == "Density Plot") {
+        ggplot(df, aes_string(x = var)) +
+          geom_density() +
+          labs(title = paste("Density Plot of", var), x = var, y = "Density")
+      }
     })
   })
   
@@ -328,6 +374,27 @@ server <- function(input, output, session) {
       labs(title = "Model Accuracy Comparison", x = "Model", y = "Accuracy") +
       theme_minimal()
   })
+  
+  output$comparisonText <- renderText({
+    results <- model_results()
+    if(nrow(results) > 1) {
+      best_model <- results[which.max(results$Accuracy), ]
+      worst_model <- results[which.min(results$Accuracy), ]
+      paste("The best performing algorithm is", best_model$Model, "with an accuracy of", 
+            round(best_model$Accuracy * 100, 2), "%. The worst performing algorithm is", 
+            worst_model$Model, "with an accuracy of", round(worst_model$Accuracy * 100, 2), "%.")
+    } else {
+      "Run more models to see the comparison."
+    }
+  })
 }
 
 shinyApp(ui, server)
+
+
+
+
+
+
+
+

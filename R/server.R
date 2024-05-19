@@ -1,3 +1,17 @@
+# Load necessary libraries
+library(shiny)           # For building interactive web applications in R
+library(shinydashboard)  # For creating dashboards in Shiny applications
+library(readxl)          # For reading Excel files into R
+library(DT)              # For rendering interactive data tables in Shiny
+library(ggplot2)         # For creating advanced graphics and visualizations
+library(class)           # For implementing k-nearest neighbors (k-NN) classification
+library(rpart)           # For building decision tree models
+library(Rtsne)           # For performing t-distributed Stochastic Neighbor Embedding (t-SNE) for dimensionality reduction
+library(shinycssloaders) # For adding CSS loaders (spinners) to Shiny outputs while they are recalculating
+library(plotly)          # For creating interactive plots and visualizations
+library(caret)           # For streamlining the process of training and evaluating machine learning models
+library(cluster)
+library(factoextra)
 # Defining the server logic of the app
 server <- function(input, output, session) {
   data <- reactiveVal()  # store the uploaded data
@@ -34,6 +48,11 @@ server <- function(input, output, session) {
     updateSelectInput(session, "xClust", choices = names(df))
     updateSelectInput(session, "yClust", choices = names(df))
     updateSelectInput(session, "edaVar", choices = names(df))
+    
+    updateSelectInput(session, "xAxisPCA", choices = names(df))
+    updateSelectInput(session, "yAxisPCA", choices = names(df))
+    updateSelectInput(session, "xAxisTSNE", choices = names(df))
+    updateSelectInput(session, "yAxisTSNE", choices = names(df))
   })
   
   # Run classification algorithm when the "runClass" button is clicked
@@ -161,28 +180,7 @@ server <- function(input, output, session) {
           footer = NULL
         ))
       })
-    } else if (input$clustAlg == "Spectral") {
-      # Spectral clustering
-      tryCatch({
-        model <- specc(as.matrix(predictors), centers = input$numClusters)  # Running spectral clustering
-        clusters <- model@.Data  # Getting clusters from the model
-        output$clustPlot <- renderPlotly({
-          ggplot(data.frame(predictors, Cluster = factor(clusters)), aes_string(x = x_var, y = y_var)) +
-            geom_point(aes(color = Cluster)) +
-            labs(title = "Spectral Clustering", x = x_var, y = y_var)
-        })  # clustering plot
-        output$silPlot <- renderPlotly({
-          fviz_silhouette(silhouette(clusters, dist(predictors)))
-        })  #  silhouette plot
-      }, error = function(e) {
-        showModal(modalDialog(
-          title = "Error",
-          paste("Spectral clustering failed:", e$message),
-          easyClose = TRUE,
-          footer = NULL
-        ))
-      })
-    }
+    } 
   })
   
   # Running visualization algorithm when the "runVis" button is clicked
@@ -193,16 +191,16 @@ server <- function(input, output, session) {
     
     if (input$visAlg == "PCA") {
       # PCA visualization
-      req(input$xAxis, input$yAxis)  # Ensures x and y variables are selected
+      req(input$xAxisPCA, input$yAxisPCA)  # Ensures x and y variables are selected
       tryCatch({
         pca <- prcomp(predictors, scale. = TRUE)  # Running PCA
         pca_df <- data.frame(pca$x)  # Get PCA results
         pca_df <- cbind(pca_df, df)  # Combine PCA results with original data
         output$visPlot <- renderPlotly({
-          ggplot(pca_df, aes_string(x = input$xAxis, y = input$yAxis)) +
+          ggplot(pca_df, aes_string(x = input$xAxisPCA, y = input$yAxisPCA)) +
             geom_point() +
-            labs(title = "PCA Visualization", x = input$xAxis, y = input$yAxis)
-        })  #  PCA plot
+            labs(title = "PCA Visualization", x = input$xAxisPCA, y = input$yAxisPCA)
+        })  # PCA plot
       }, error = function(e) {
         showModal(modalDialog(
           title = "Error",
@@ -213,16 +211,17 @@ server <- function(input, output, session) {
       })
     } else if (input$visAlg == "t-SNE") {
       # t-SNE visualization
+      req(input$xAxisTSNE, input$yAxisTSNE)  # Ensures x and y variables are selected
       tryCatch({
         tsne <- Rtsne(as.matrix(predictors), dims = 2, perplexity = 30, verbose = FALSE, max_iter = 500)  # Run t-SNE
         tsne_df <- data.frame(tsne$Y)  # Get t-SNE results
         colnames(tsne_df) <- c("Dim1", "Dim2")  # Set column names for t-SNE results
         tsne_df <- cbind(tsne_df, df)  # Combines t-SNE results with original data
         output$visPlot <- renderPlotly({
-          ggplot(tsne_df, aes(x = Dim1, y = Dim2)) +
+          ggplot(tsne_df, aes_string(x = input$xAxisTSNE, y = input$yAxisTSNE)) +
             geom_point() +
-            labs(title = "t-SNE Visualization", x = "Dim1", y = "Dim2")
-        })  #  t-SNE plot
+            labs(title = "t-SNE Visualization", x = input$xAxisTSNE, y = input$yAxisTSNE)
+        })  # t-SNE plot
       }, error = function(e) {
         showModal(modalDialog(
           title = "Error",

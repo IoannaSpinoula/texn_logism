@@ -1,5 +1,4 @@
 # Load necessary libraries
-# Load necessary libraries
 
 library(shiny)           # For building interactive web applications in R
 library(shinydashboard)  # For creating dashboards in Shiny applications
@@ -12,7 +11,8 @@ library(Rtsne)           # For performing t-distributed Stochastic Neighbor Embe
 library(shinycssloaders) # For adding CSS loaders (spinners) to Shiny outputs while they are recalculating
 library(plotly)          # For creating interactive plots and visualizations
 library(caret)           # For streamlining the process of training and evaluating machine learning models
-
+library(cluster)
+library(factoextra)
 source("R/ui.R")
 source("R/server.R")
 

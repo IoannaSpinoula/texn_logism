@@ -1,3 +1,4 @@
+library(shinydashboard)
 # Defining the User Interface of the app
 ui <- dashboardPage(
   skin = "blue",  # Setting the color of the dashboard
@@ -68,7 +69,7 @@ ui <- dashboardPage(
                   ),
                   fluidRow(
                     column(6, numericInput("numClusters", "Number of Clusters:", value = 3, min = 1)),  # Input  number of clusters
-                    column(6, selectInput("clustAlg", "Select Clustering Algorithm:", choices = c("k-means", "Hierarchical", "Spectral")))  # Select the clustering algorithm
+                    column(6, selectInput("clustAlg", "Select Clustering Algorithm:", choices = c("k-means", "Hierarchical")))  # Select the clustering algorithm
                   ),
                   actionButton("runClust", "Run Clustering", class = "btn-primary"),  # Button to run the clustering algorithm
                   plotlyOutput("clustPlot") %>% withSpinner(color="#0dc5c1"),  # Display  spinner while loading
@@ -86,8 +87,15 @@ ui <- dashboardPage(
                   conditionalPanel(
                     condition = "input.visAlg == 'PCA'",
                     fluidRow(
-                      column(6, selectInput("xAxis", "Select X-axis Variable:", choices = NULL)),  # Selecting the variable for x-axis in PCA
-                      column(6, selectInput("yAxis", "Select Y-axis Variable:", choices = NULL))  # Selecting the variable for y-axis in PCA
+                      column(6, selectInput("xAxisPCA", "Select X-axis Variable (PCA):", choices = NULL)),
+                      column(6, selectInput("yAxisPCA", "Select Y-axis Variable (PCA):", choices = NULL))
+                    )
+                  ),
+                  conditionalPanel(
+                    condition = "input.visAlg == 't-SNE'",
+                    fluidRow(
+                      column(6, selectInput("xAxisTSNE", "Select X-axis Variable (t-SNE):", choices = NULL)),
+                      column(6, selectInput("yAxisTSNE", "Select Y-axis Variable (t-SNE):", choices = NULL))
                     )
                   ),
                   actionButton("runVis", "Run Visualization", class = "btn-primary"),  # Button to run the visualization

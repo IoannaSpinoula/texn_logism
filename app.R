@@ -1,10 +1,10 @@
 # Load necessary libraries
 
-library(shiny)           # For building interactive web applications in R
+library(shiny)           #  interactive web applications in R
 library(shinydashboard)  # For creating dashboards in Shiny applications
-library(readxl)          # For reading Excel files into R
-library(DT)              # For rendering interactive data tables in Shiny
-library(ggplot2)         # For creating advanced graphics and visualizations
+library(readxl)          #  reading Excel files into R
+library(DT)              # rendering interactive data tables in Shiny
+library(ggplot2)         #  advanced graphics and visualizations
 library(class)           # For implementing k-nearest neighbors (k-NN) classification
 library(rpart)           # For building decision tree models
 library(Rtsne)           # For performing t-distributed Stochastic Neighbor Embedding (t-SNE) for dimensionality reduction

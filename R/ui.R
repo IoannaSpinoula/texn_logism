@@ -131,7 +131,7 @@ ui <- dashboardPage(
                 box(
                   title = "About", status = "primary", solidHeader = TRUE, width = 12,
                   p("This application was developed for data analysis, providing detailed presentations of algorithm results, including performance metrics, and indicating which algorithms perform best for the analyzed data."),
-                  p("Developed by: Ioanna Spinoula inf2021211 (application and report), Despina Makri inf2021128 (application and report), Panagiotis Traxanas inf2021 (application and report)")
+                  p("Developed by: Ioanna Spinoula inf2021211 (application and report), Despina Makri inf2021128 (application and report), Panagiotis Traxanas inf2021227 (application and report)")
                 ),
                 box(
                   title="How to use", status = "primary", solidHeader = TRUE, width = 12,

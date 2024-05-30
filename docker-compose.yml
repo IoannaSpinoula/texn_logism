@@ -1,31 +1,11 @@
-version: '3.5'
-services:
-  mysql:
-    image: mysql:8.0.28
-    container_name: techn_logism_sql
-    environment:
-      MYSQL_DATABASE: di_technologies_logismikou_project
-      MYSQL_USER: webuser
-      MYSQL_PASSWORD: webpass
-      MYSQL_ROOT_PASSWORD: rootpass
-      TZ: EEST
-    ports:
-      - "3306:3306"
-    volumes:
-      - ./mysql-init:/docker-entrypoint-initdb.d/:ro
-    networks:
-      - technologies_logismikou_network
+version: '3.8'
 
-  shiny-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: techn_logism_shiny
+services:
+  shiny:
+    build: .
     ports:
       - "3838:3838"
-    networks:
-      - technologies_logismikou_network
-
-networks:
-  technologies_logismikou_network:
-    driver: bridge
+    volumes:
+      - .:/srv/shiny-server
+    environment:
+      - SHINY_LOG_STDERR=1

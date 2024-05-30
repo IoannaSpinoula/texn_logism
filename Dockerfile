@@ -1,28 +1,29 @@
+# Use the rocker/shiny base image
 FROM rocker/shiny:latest
 
-# Update and install system libraries
+# Install system dependencies for R packages
 RUN apt-get update && apt-get install -y \
-    libcurl4-openssl-dev \
-    libssl-dev \
     libxml2-dev \
-    build-essential \
-    libjpeg-dev \
-    libpng-dev \
-    gfortran
+    libssl-dev \
+    libcurl4-openssl-dev \
+    libudunits2-dev \
+    libgdal-dev \
+    libgeos-dev \
+    libproj-dev \
+    && apt-get clean
 
-# Install R packages
-RUN R -e "install.packages('vctrs', dependencies=TRUE, repos='http://cran.rstudio.com/')" && \
-    R -e "install.packages(c('shiny', 'shinydashboard', 'shinycssloaders', 'readxl', 'DT', 'ggplot2', 'plotly', 'e1071', 'class', 'rpart', 'cluster', 'kernlab', 'Rtsne', 'factoextra', 'dplyr', 'gridExtra', 'caret'), dependencies=TRUE, repos='http://cran.rstudio.com/')"
+# Install R packages from CRAN
+COPY requirements.txt /requirements.txt
+RUN R -e "packages <- scan('/requirements.txt', what = character()); install.packages(packages)"
 
-# Copy application files
-COPY ./app.R /srv/shiny-server/app.R
-COPY ./R /srv/shiny-server/R
+# Copy the Shiny app to the image
+COPY . /srv/shiny-server/
 
-# Set ownership
+# Make sure the app is runnable by any user
 RUN chown -R shiny:shiny /srv/shiny-server
 
-# Expose the application port
+# Expose the port where the Shiny app will run
 EXPOSE 3838
 
-# Run the application
-CMD ["R", "-e", "shiny::runApp('/srv/shiny-server/app.R')"]
+# Run the Shiny app
+CMD ["/usr/bin/shiny-server"]

@@ -9,3 +9,5 @@ Rtsne
 shinycssloaders
 plotly
 caret
+cluster
+factoextra
